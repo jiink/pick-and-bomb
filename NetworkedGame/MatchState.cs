@@ -1,4 +1,5 @@
 ﻿using Riptide;
+using SuperMineBombersTogether.PacketTypes;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -9,20 +10,34 @@ using System.Threading.Tasks;
 
 namespace SuperMineBombersTogether
 {
-    internal class GameState : IMessageSerializable
+    internal class MatchState : IMessageSerializable
     {
         public List<Player> Players { get; private set; }
 
-        public GameState()
+        public MatchState()
         {
             Players = new List<Player>();
         }
 
-        public void Update(float deltaTime)
+        public void Update(float deltaTime, List<PlayerInputState> inputs)
         {
             foreach (Player player in Players)
             {
-                player.Update(deltaTime);
+                // Update with input matching id
+                bool found = false;
+                foreach (PlayerInputState input in inputs)
+                {
+                    if (player.Id == input.clientId)
+                    {
+                        found = true;
+                        player.Update(deltaTime, input);
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    player.Update(deltaTime, new PlayerInputState());
+                }
             }
         }
 
@@ -36,15 +51,13 @@ namespace SuperMineBombersTogether
             Players.Remove(player);
         }
 
-        //public void MovePlayer(int playerNum, float x, float y)
-        //{
-        //    if (Players.Count < playerNum + 1)
-        //    {
-        //        return;
-        //    }
-        //    Player player = Players[playerNum];
-        //    UpdatePlayerPosition(playerNum, player.X + x, player.Y + y);
-        //}   
+        public void Draw()
+        {
+            foreach (Player player in Players)
+            {
+                player.Draw();
+            }
+        }
 
         public void UpdatePlayerPosition(int playerNum, float x, float y)
         {
@@ -61,10 +74,7 @@ namespace SuperMineBombersTogether
             message.AddInt(Players.Count);
             foreach (Player player in Players)
             {
-                message.AddFloat(player.Pos.X);
-                message.AddFloat(player.Pos.Y);
-                message.AddFloat(player.Vel.X);
-                message.AddFloat(player.Vel.Y);
+                message.AddSerializable(player);
             }
         }
 
@@ -73,19 +83,8 @@ namespace SuperMineBombersTogether
             int playerCount = message.GetInt();
             for (int i = 0; i < playerCount; i++)
             {
-                float x = message.GetFloat();
-                float y = message.GetFloat();
-
-                if (Players.Count < i + 1)
-                {
-                    Player player = new Player(x, y, Player.colorList[i]);
-                    Players.Add(player);
-                }
-                else
-                {
-                    Players[i].SetPosition(x, y);
-                    Players[i].Vel = new Vector2(message.GetFloat(), message.GetFloat());
-                }
+                Player p = message.GetSerializable<Player>();
+                Players.Add(p);
             }
         }
     }

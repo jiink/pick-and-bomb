@@ -12,10 +12,9 @@ namespace SuperMineBombersTogether
         public enum MessageId
         {
             Heartbeat = 0,
-            PlayerPosition,
-            PlayerMove,
+            PlayerInput,
             PlayerAssign,
-            GameState,
+            MatchState,
         }
     }
 }

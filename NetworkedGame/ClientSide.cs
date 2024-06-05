@@ -9,6 +9,7 @@ using Riptide.Transports;
 using static SuperMineBombersTogether.Common;
 using SuperMineBombersTogether.PacketTypes;
 using System.Reflection.Metadata;
+using System.Numerics;
 
 
 namespace SuperMineBombersTogether
@@ -17,7 +18,7 @@ namespace SuperMineBombersTogether
     class ClientSide
     {
         static int playerNum = 0;
-        static GameState gameState = new GameState();
+        static MatchState matchState = new MatchState();
         static Player myPlayer = null;
         static float deltaX = 0;
         static float deltaY = 0;
@@ -31,51 +32,23 @@ namespace SuperMineBombersTogether
 
             while (!Window.ShouldClose())
             {
-                if (gameState.Players.Count > playerNum)
+                if (matchState.Players.Count > playerNum)
                 {
-                    myPlayer = gameState.Players[playerNum];
+                    myPlayer = matchState.Players[playerNum];
                 }
                 if (myPlayer == null)
                 {
                     continue;
                 }
-                const float moveSpeed = 300.0f;
-                deltaX = 0;
-                deltaY = 0;
-                if (Input.IsKeyDown(KeyboardKey.Right)) { 
-                    myPlayer.Vel.X = moveSpeed;
-                    deltaX += moveSpeed;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Left)){
-                    myPlayer.Vel.X = -moveSpeed;
-                    deltaX -= moveSpeed;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Up)){
-                    myPlayer.Vel.Y = -moveSpeed;
-                    deltaY -= moveSpeed;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Down)){
-                    myPlayer.Vel.Y = moveSpeed;
-                    deltaY += moveSpeed;
-                }
 
-                gameState.Update(Time.GetFrameTime());
 
                 Graphics.BeginDrawing();
                 Graphics.ClearBackground(Color.RayWhite);
-                DrawGameState(gameState);
+                matchState.Draw();
                 Graphics.EndDrawing();
             }
 
             Window.Close();
-        }
-
-        private static void DrawGameState(GameState gameState)
-        {
-            foreach (Player player in gameState.Players)
-            {
-                Graphics.DrawRectangle((int)player.Pos.X, (int)player.Pos.Y, 50, 50, player.Color);
-            }
         }
 
         [MessageHandler((ushort)MessageId.Heartbeat)]
@@ -85,19 +58,12 @@ namespace SuperMineBombersTogether
             //Console.WriteLine($"I got {someInt}");
         }
 
-        [MessageHandler((ushort)MessageId.PlayerAssign)]
-        private static void HandlePlayerAssign(Message message)
+        [MessageHandler((ushort)MessageId.MatchState)]
+        private static void HandleMatchState(Message message)
         {
-            PlayerAssignS2C playerAssign = message.GetSerializable<PlayerAssignS2C>();
-            playerNum = playerAssign.PlayerNumber;
-            //player.Color = Player.colorList[playerNum];
-            Console.WriteLine($"I am player {playerNum}");
-        }
-
-        [MessageHandler((ushort)MessageId.GameState)]
-        private static void HandleGameState(Message message)
-        {
-            gameState.Deserialize(message);
+            //matchState.Deserialize(message);
+            MatchState newMatchState = message.GetSerializable<MatchState>();
+            matchState = newMatchState;
         }
 
         private static void OnDisconnect(object? sender, Riptide.DisconnectedEventArgs e)
@@ -119,12 +85,35 @@ namespace SuperMineBombersTogether
             var client = (Client)state;
             client.Update();
 
-            if (client.IsConnected && gameState.Players.Count > playerNum)
+            if (client.IsConnected && matchState.Players.Count > playerNum)
             {
-                PlayerMoveC2S playerMove = new PlayerMoveC2S(playerNum, deltaX, deltaY);
-                Message message2 = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerMoveC2S.Id);
-                message2.AddSerializable(playerMove);
-                client.Send(message2);
+                Vector2 moveDir = new Vector2(0, 0);
+                if (Input.IsKeyDown(KeyboardKey.Right))
+                {
+                    moveDir.X += 1;
+                }
+                if (Input.IsKeyDown(KeyboardKey.Left))
+                {
+                    moveDir.X -= 1;
+                }
+                if (Input.IsKeyDown(KeyboardKey.Up))
+                {
+                    moveDir.Y += 1;
+                }
+                if (Input.IsKeyDown(KeyboardKey.Down))
+                {
+                    moveDir.Y -= 1;
+                }
+                moveDir = Vector2.Normalize(moveDir);
+                PlayerInputState playerMove = new PlayerInputState(
+                    moveDir,
+                    Input.IsKeyDown(KeyboardKey.Space),
+                    Input.IsKeyPressed(KeyboardKey.Space),
+                    Input.IsKeyReleased(KeyboardKey.Space)
+                );
+                Message message = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerInputState.Id);
+                message.AddSerializable(playerMove);
+                client.Send(message);
             }
         }
 

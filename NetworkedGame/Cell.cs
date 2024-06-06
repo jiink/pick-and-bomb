@@ -1,6 +1,8 @@
 ﻿using Raylib_CSharp.Colors;
 using Raylib_CSharp.Rendering;
 using Riptide;
+using Riptide.Utils;
+using System.Diagnostics;
 using System.Numerics;
 
 namespace SuperMineBombersTogether
@@ -9,6 +11,7 @@ namespace SuperMineBombersTogether
     {
         public enum CellType
         {
+            None, // For deltas
             Air,
             Dirt,
             Stone,
@@ -32,8 +35,9 @@ namespace SuperMineBombersTogether
             { CellType.Treasure, Color.Gold },
             { CellType.Wall, Color.Gray }
         };
-        CellType type;
-        float health = 100;
+        public CellType type;
+        public float health = 100;
+        public bool isDirty = false;
 
         public Cell()
         {
@@ -43,6 +47,7 @@ namespace SuperMineBombersTogether
         public Cell(CellType type)
         {
             this.type = type;
+            isDirty = true;
         }
 
         public void Damage(float damage)
@@ -62,18 +67,63 @@ namespace SuperMineBombersTogether
             {
                 type = CellType.Air;
             }
+            isDirty = true;
+            RiptideLogger.Log(LogType.Debug, $"Damaged cell {type} by {damage} to {health}");
         }
+
+        //public void Serialize(Message message)
+        //{
+        //    message.AddInt((int)type);
+        //    message.AddFloat(health);
+        //}
+
+        //public void Deserialize(Message message)
+        //{
+        //    type = (CellType)message.GetInt();
+        //    health = message.GetFloat();
+        //}
 
         public void Serialize(Message message)
         {
-            message.AddInt((int)type);
-            message.AddFloat(health);
+            byte hp4bit = (byte)(health/100f * 0x0F);
+            byte b = (byte)((byte)type << 4 | (hp4bit & 0x0F));
+            message.AddByte(b);
         }
 
         public void Deserialize(Message message)
         {
-            type = (CellType)message.GetInt();
-            health = message.GetFloat();
+            byte b = message.GetByte();
+            type = (CellType)(b >> 4);
+            byte hp4bit = (byte)(b & 0x0F);
+            health = hp4bit / 16f * 100;
+
+        }
+
+        public static bool floatEquals(float a, float b)
+        {
+            return Math.Abs(a - b) < 0.0001;
+        }
+
+        public static bool operator !=(Cell a, Cell b)
+        {
+            return !a.Equals(b);
+        }
+
+        public static bool operator ==(Cell a, Cell b)
+        {
+            return a.Equals(b);
+        }
+
+        public override bool Equals(object obj)
+        {
+            Trace.Assert(obj is Cell);
+            Cell other = (Cell)obj;
+            return type == other.type && floatEquals(health, other.health);
+        }
+
+        public override string ToString()
+        {
+            return $"{type} {health}";
         }
 
         public void Draw(float x, float y)

@@ -14,11 +14,14 @@ namespace SuperMineBombersTogether
     {
         public List<Player> players;
         public Playfield playfield;
+        public Playfield prevPlayfield; // For calculating deltas
 
         public MatchState()
         {
             players = new List<Player>();
-            playfield = new Playfield(8, 8);
+            playfield = new Playfield();
+            //playfield.Fill();
+            prevPlayfield = new Playfield();
         }
 
         public void Update(float deltaTime, List<PlayerInputState> inputs)
@@ -58,7 +61,7 @@ namespace SuperMineBombersTogether
 
         public void Draw()
         {
-            foreach (Player player in players)
+            foreach (Player player in players.ToList())
             {
                 player.Draw();
             }
@@ -82,6 +85,8 @@ namespace SuperMineBombersTogether
             {
                 message.AddSerializable(player);
             }
+            // Calculate delta
+            //Playfield pfdelta = playfield.CalculateDelta(prevPlayfield);
             message.AddSerializable(playfield);
         }
 
@@ -93,7 +98,10 @@ namespace SuperMineBombersTogether
                 Player p = message.GetSerializable<Player>();
                 players.Add(p);
             }
+            //Playfield pfdelta = message.GetSerializable<Playfield>();
+            //playfield.ApplyDelta(pfdelta);
             playfield = message.GetSerializable<Playfield>();
+            //prevPlayfield = playfield.DeepCopy();
         }
     }
 }

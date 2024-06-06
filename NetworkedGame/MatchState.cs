@@ -12,16 +12,18 @@ namespace SuperMineBombersTogether
 {
     internal class MatchState : IMessageSerializable
     {
-        public List<Player> Players { get; private set; }
+        public List<Player> players;
+        public Playfield playfield;
 
         public MatchState()
         {
-            Players = new List<Player>();
+            players = new List<Player>();
+            playfield = new Playfield(8, 8);
         }
 
         public void Update(float deltaTime, List<PlayerInputState> inputs)
         {
-            foreach (Player player in Players)
+            foreach (Player player in players)
             {
                 // Update with input matching id
                 bool found = false;
@@ -31,6 +33,9 @@ namespace SuperMineBombersTogether
                     {
                         found = true;
                         player.Update(deltaTime, input);
+                        // If you push against a solid cell you start mining it
+                        const float miningSpeed = 300f; // Health per second
+                        playfield.GetCellAtPos(player.Pos)?.Damage(deltaTime * miningSpeed);
                         break;
                     }
                 }
@@ -43,39 +48,41 @@ namespace SuperMineBombersTogether
 
         public void AddPlayer(Player player)
         {
-            Players.Add(player);
+            players.Add(player);
         }
 
         public void RemovePlayer(Player player)
         {
-            Players.Remove(player);
+            players.Remove(player);
         }
 
         public void Draw()
         {
-            foreach (Player player in Players)
+            foreach (Player player in players)
             {
                 player.Draw();
             }
+            playfield.Draw();
         }
 
         public void UpdatePlayerPosition(int playerNum, float x, float y)
         {
-            if (Players.Count < playerNum + 1)
+            if (players.Count < playerNum + 1)
             {
                 return;
             }
-            Player player = Players[playerNum];
+            Player player = players[playerNum];
             player.SetPosition(x, y);
         }
 
         public void Serialize(Message message)
         {
-            message.AddInt(Players.Count);
-            foreach (Player player in Players)
+            message.AddInt(players.Count);
+            foreach (Player player in players)
             {
                 message.AddSerializable(player);
             }
+            message.AddSerializable(playfield);
         }
 
         public void Deserialize(Message message)
@@ -84,8 +91,9 @@ namespace SuperMineBombersTogether
             for (int i = 0; i < playerCount; i++)
             {
                 Player p = message.GetSerializable<Player>();
-                Players.Add(p);
+                players.Add(p);
             }
+            playfield = message.GetSerializable<Playfield>();
         }
     }
 }

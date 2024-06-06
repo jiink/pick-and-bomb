@@ -35,9 +35,9 @@ namespace SuperMineBombersTogether
 
             while (!Window.ShouldClose())
             {
-                if (matchState.Players.Count > playerNum)
+                if (matchState.players.Count > playerNum)
                 {
-                    myPlayer = matchState.Players[playerNum];
+                    myPlayer = matchState.players[playerNum];
                 }
                 if (myPlayer == null)
                 {
@@ -99,7 +99,7 @@ namespace SuperMineBombersTogether
             var client = (Client)state;
             client.Update();
 
-            if (client.IsConnected && matchState.Players.Count > playerNum)
+            if (client.IsConnected && matchState.players.Count > playerNum)
             {
                 Vector2 moveDir = new Vector2(0, 0);
                 if (Input.IsKeyDown(KeyboardKey.Right))

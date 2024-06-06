@@ -8,7 +8,7 @@ namespace SuperMineBombersTogether
 {
     internal class Common
     {
-        public const int tickRate = 60;
+        public const int tickRate = 20;
         public enum MessageId
         {
             Heartbeat = 0,

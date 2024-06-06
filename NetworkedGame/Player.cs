@@ -12,7 +12,7 @@ namespace SuperMineBombersTogether
         public int Id = 0;
         public Vector2 Pos = new Vector2(0, 0);
         public Vector2 Vel = new Vector2(0, 0);
-        float defSpeed = 50; //How fast you walk by default
+        float defSpeed = 20; //How fast you walk by default
         int colorIndex = 0;
         
         public Player() { }
@@ -37,7 +37,8 @@ namespace SuperMineBombersTogether
 
         public void Draw()
         {
-            Graphics.DrawRectangle((int)Pos.X, (int)Pos.Y, 50, 50, colorList[colorIndex]);
+            //Console.WriteLine($"Drawing player at {Pos}");
+            Graphics.DrawCircleV(Pos, 1, colorList[colorIndex]);
         }
 
         public void Serialize(Message message)

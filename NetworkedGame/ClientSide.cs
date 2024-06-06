@@ -10,7 +10,7 @@ using static SuperMineBombersTogether.Common;
 using SuperMineBombersTogether.PacketTypes;
 using System.Reflection.Metadata;
 using System.Numerics;
-
+using Raylib_CSharp.Camera.Cam2D;
 
 namespace SuperMineBombersTogether
 {
@@ -22,6 +22,7 @@ namespace SuperMineBombersTogether
         static Player myPlayer = null;
         static float deltaX = 0;
         static float deltaY = 0;
+        static Camera2D camera = new Camera2D();
         static public void Start()
         {
             Client client = new Client();
@@ -29,6 +30,8 @@ namespace SuperMineBombersTogether
             client.Disconnected += OnDisconnect;
             client.Connect("127.0.0.1:7777");
             Timer timer = new Timer(FixedUpdate, client, 0, 1000 / Common.tickRate);
+
+            InitCamera(ref camera);
 
             while (!Window.ShouldClose())
             {
@@ -43,12 +46,23 @@ namespace SuperMineBombersTogether
 
 
                 Graphics.BeginDrawing();
+                Graphics.BeginMode2D(camera);
                 Graphics.ClearBackground(Color.RayWhite);
+                Graphics.DrawCircle(0, 0, 1, Color.Black);
                 matchState.Draw();
+                Graphics.EndMode2D();
                 Graphics.EndDrawing();
             }
 
             Window.Close();
+        }
+
+        private static void InitCamera(ref Camera2D camera)
+        {
+            camera.Target = new Vector2(0, 0);
+            camera.Offset = new Vector2(Window.GetScreenWidth() / 2, Window.GetScreenHeight() / 2);
+            camera.Rotation = 0.0f;
+            camera.Zoom = 20.0f;
         }
 
         [MessageHandler((ushort)MessageId.Heartbeat)]
@@ -98,13 +112,16 @@ namespace SuperMineBombersTogether
                 }
                 if (Input.IsKeyDown(KeyboardKey.Up))
                 {
-                    moveDir.Y += 1;
+                    moveDir.Y -= 1;
                 }
                 if (Input.IsKeyDown(KeyboardKey.Down))
                 {
-                    moveDir.Y -= 1;
+                    moveDir.Y += 1;
                 }
-                moveDir = Vector2.Normalize(moveDir);
+                if (moveDir.Length() > 0)
+                {
+                    moveDir = Vector2.Normalize(moveDir);
+                }
                 PlayerInputState playerMove = new PlayerInputState(
                     moveDir,
                     Input.IsKeyDown(KeyboardKey.Space),

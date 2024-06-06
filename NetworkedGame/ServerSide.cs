@@ -39,7 +39,7 @@ namespace SuperMineBombersTogether
             if (sender == null) return;
             var server = (Server)sender;
             Console.WriteLine($"Client {e.Client.ToString} (id: {e.Client.Id}) connected!");
-            matchState.AddPlayer(new Player(100, 100, server.ClientCount, e.Client.Id));
+            matchState.AddPlayer(new Player(0, 0, server.ClientCount, e.Client.Id));
             // Assign player number to client
             //Message message = Message.Create(MessageSendMode.Reliable, (ushort)PlayerAssignS2C.Id);
             //PlayerAssignS2C playerAssign = new PlayerAssignS2C(matchState.Players.Count - 1);
@@ -64,7 +64,7 @@ namespace SuperMineBombersTogether
         {
             PlayerInputState playerInput = message.GetSerializable<PlayerInputState>();
             playerInput.clientId = u;
-            Debug.WriteLine($"Got message from {u}");
+            //Debug.WriteLine($"Got message from {u}: {playerInput}");
             // Check input list to see if we have an input from this client
             bool found = false;
             for (int i = 0; i < playerInputs.Count; i++)
@@ -95,7 +95,7 @@ namespace SuperMineBombersTogether
             playerInputs.Clear(); // Consume the inputs
 
             Message message = Message.Create(MessageSendMode.Unreliable, (ushort)MessageId.MatchState);
-            matchState.Serialize(message);
+            message.AddSerializable(matchState);
             server.SendToAll(message);
         }
     }

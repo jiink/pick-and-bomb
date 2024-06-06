@@ -29,6 +29,11 @@ namespace SuperMineBombersTogether.PacketTypes
             this.attackReleased = attackReleased;
         }
 
+        public override string ToString()
+        {
+            return $"Dir: {direction}, Atk: {attack}, AtkP: {attackPressed}, AtkR: {attackReleased}";
+        }
+
         public void Serialize(Message message)
         {
             message.AddFloat(direction.X);

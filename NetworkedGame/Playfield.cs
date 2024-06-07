@@ -8,9 +8,9 @@ namespace SuperMineBombersTogether
 {
     public class Playfield : List<Cell>, IMessageSerializable
     {
-        const int MAX = 64;
-        const int width = 8;
-        const int height = 8;
+        const int width = 33;
+        const int height = 33;
+        const int MAX = width * height;
 
         public Playfield()
         {
@@ -95,18 +95,18 @@ namespace SuperMineBombersTogether
 
         public void Serialize(Message message)
         {
-            for (int i = 0; i < Count; i++)
-            {
-                message.AddSerializable(this[i]);
-            }
+            //for (int i = 0; i < Count; i++)
+            //{
+            //    message.AddSerializable(this[i]);
+            //}
         }
 
         public void Deserialize(Message message)
         {
-            for (int i = 0; i < Count; i++)
-            {
-                this[i] = message.GetSerializable<Cell>();
-            }
+            //for (int i = 0; i < Count; i++)
+            //{
+            //    this[i] = message.GetSerializable<Cell>();
+            //}
         }
 
         public Playfield DeepCopy()

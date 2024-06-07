@@ -12,6 +12,8 @@ using static SuperMineBombersTogether.Common;
 using SuperMineBombersTogether.PacketTypes;
 using System.Numerics;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using Riptide.Utils;
 
 namespace SuperMineBombersTogether
 {
@@ -19,6 +21,7 @@ namespace SuperMineBombersTogether
     {
         static MatchState matchState = new MatchState();
         static List<PlayerInputState> playerInputs = new List<PlayerInputState>();
+        static int counter = 0;
         static public void Start()
         {
             Server server = new Server();
@@ -96,6 +99,11 @@ namespace SuperMineBombersTogether
 
             Message message = Message.Create(MessageSendMode.Unreliable, (ushort)MessageId.MatchState);
             message.AddSerializable(matchState);
+            if (counter++ > 10)
+            {
+                RiptideLogger.Log(LogType.Debug, $"Server sending {(message.WrittenBits / 8) * tickRate} byte/s");
+                counter = 0;
+            }
             server.SendToAll(message);
         }
     }

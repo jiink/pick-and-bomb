@@ -68,7 +68,6 @@ namespace SuperMineBombersTogether
                 type = CellType.Air;
             }
             isDirty = true;
-            RiptideLogger.Log(LogType.Debug, $"Damaged cell {type} by {damage} to {health}");
         }
 
         //public void Serialize(Message message)

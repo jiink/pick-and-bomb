@@ -48,9 +48,9 @@ namespace SuperMineBombersTogether
                 Graphics.BeginDrawing();
                 Graphics.BeginMode2D(camera);
                 Graphics.ClearBackground(Color.RayWhite);
-                Graphics.DrawCircle(0, 0, 1, Color.Black);
                 matchState.Draw();
                 Graphics.EndMode2D();
+                Graphics.DrawCircle(0, 0, (float)Math.Cos(Time.GetTime()*10)*20+40, Color.Black);
                 Graphics.EndDrawing();
             }
 
@@ -82,7 +82,7 @@ namespace SuperMineBombersTogether
 
         private static void OnDisconnect(object? sender, Riptide.DisconnectedEventArgs e)
         {
-            Console.WriteLine($"Disconnected from server: {e.Reason}");
+            Console.WriteLine($"Disconnected from server: {e.Reason} -- {e.Message}");
         }
 
         private static void OnConnectionFail(object? sender, ConnectionFailedEventArgs e)
@@ -92,6 +92,7 @@ namespace SuperMineBombersTogether
 
         private static void FixedUpdate(object? state)
         {
+            Console.Write("yo");
             if (state == null)
             {
                 return;

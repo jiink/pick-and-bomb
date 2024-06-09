@@ -62,25 +62,23 @@ namespace SuperMineBombersTogether
             int numEnts = message.GetInt();
             for (int i = 0; i < numEnts; i++)
             {
-                var eId = message.GetInt();
-                var ePos = new Vector2(message.GetFloat(), message.GetFloat());
-                Player? entWithSameId = null;
-                foreach (Player p in matchState.players)
+                Player ent = message.GetSerializable<Player>();
+                int index = -1;
+                for (int j = 0; j < matchState.players.Count; j++)
                 {
-                    if (p.id == eId)
+                    if (matchState.players[j].id == ent.id)
                     {
-                        entWithSameId = p;
+                        index = j;
                         break;
                     }
                 }
-                if (entWithSameId is null)
+                if (index != -1)
                 {
-                    Player newP = new Player(ePos.X, ePos.Y, 0, eId);
-                    matchState.AddPlayer(newP);
+                    matchState.players[index] = ent;
                 }
                 else
                 {
-                    entWithSameId.pos = ePos;
+                    matchState.AddPlayer(ent);
                 }
             }
         }
@@ -105,9 +103,15 @@ namespace SuperMineBombersTogether
         {
             if (state == null)
             {
+                Console.WriteLine("State is null in FixedUpdate");
                 return;
             }
             var client = (Client)state;
+            if (client == null)
+            {
+                Console.WriteLine("Client is null in FixedUpdate");
+                return;
+            }
             client.Update();
 
             if (client.IsConnected)

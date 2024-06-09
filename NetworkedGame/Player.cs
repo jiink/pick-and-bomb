@@ -46,8 +46,6 @@ namespace SuperMineBombersTogether
             message.AddInt(id);
             message.AddFloat(pos.X);
             message.AddFloat(pos.Y);
-            message.AddFloat(vel.X);
-            message.AddFloat(vel.Y);
             message.AddInt(colorIndex);
         }
 
@@ -55,7 +53,6 @@ namespace SuperMineBombersTogether
         {
             id = message.GetInt();
             pos = new Vector2(message.GetFloat(), message.GetFloat());
-            vel = new Vector2(message.GetFloat(), message.GetFloat());
             colorIndex = message.GetInt();
         }
     }

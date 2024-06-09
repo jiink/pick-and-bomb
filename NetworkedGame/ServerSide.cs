@@ -65,7 +65,7 @@ namespace SuperMineBombersTogether
         {
             PlayerInputStateC2S playerInput = message.GetSerializable<PlayerInputStateC2S>();
             playerInput.clientId = u;
-            Debug.WriteLine($"Got message from {u}: {playerInput}");
+            //Debug.WriteLine($"Got message from {u}: {playerInput}");
             // Check input list to see if we have an input from this client
             bool found = false;
             for (int i = 0; i < playerInputs.Count; i++)
@@ -100,9 +100,7 @@ namespace SuperMineBombersTogether
             entUpdate.AddInt(matchState.players.Count);
             foreach (Player p in matchState.players)
             {                
-                entUpdate.AddInt(p.id);
-                entUpdate.AddFloat(p.pos.X);
-                entUpdate.AddFloat(p.pos.Y);
+                entUpdate.AddSerializable(p);
             }
             server.SendToAll(entUpdate);
 

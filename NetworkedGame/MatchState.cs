@@ -14,37 +14,37 @@ namespace SuperMineBombersTogether
     {
         public List<Player> players;
         public Playfield playfield;
-        public Playfield prevPlayfield; // For calculating deltas
+        //public Playfield prevPlayfield; // For calculating deltas
 
         public MatchState()
         {
             players = new List<Player>();
             playfield = new Playfield();
             //playfield.Fill();
-            prevPlayfield = new Playfield();
+            //prevPlayfield = new Playfield();
         }
 
-        public void Update(float deltaTime, List<PlayerInputState> inputs)
+        public void Update(bool isClient, float deltaTime, List<PlayerInputStateC2S> inputs)
         {
             foreach (Player player in players)
             {
                 // Update with input matching id
                 bool found = false;
-                foreach (PlayerInputState input in inputs)
+                foreach (PlayerInputStateC2S input in inputs)
                 {
-                    if (player.Id == input.clientId)
+                    if (player.id == input.clientId)
                     {
                         found = true;
                         player.Update(deltaTime, input);
                         // If you push against a solid cell you start mining it
                         const float miningSpeed = 300f; // Health per second
-                        playfield.GetCellAtPos(player.Pos)?.Damage(deltaTime * miningSpeed);
+                        playfield.GetCellAtPos(player.pos)?.Damage(deltaTime * miningSpeed);
                         break;
                     }
                 }
                 if (!found)
                 {
-                    player.Update(deltaTime, new PlayerInputState());
+                    player.Update(deltaTime, new PlayerInputStateC2S());
                 }
             }
         }
@@ -85,9 +85,7 @@ namespace SuperMineBombersTogether
             {
                 message.AddSerializable(player);
             }
-            // Calculate delta
-            //Playfield pfdelta = playfield.CalculateDelta(prevPlayfield);
-            message.AddSerializable(playfield);
+            //message.AddSerializable(playfield);
         }
 
         public void Deserialize(Message message)
@@ -100,7 +98,7 @@ namespace SuperMineBombersTogether
             }
             //Playfield pfdelta = message.GetSerializable<Playfield>();
             //playfield.ApplyDelta(pfdelta);
-            playfield = message.GetSerializable<Playfield>();
+            //playfield = message.GetSerializable<Playfield>();
             //prevPlayfield = playfield.DeepCopy();
         }
     }

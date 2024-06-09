@@ -9,9 +9,9 @@ namespace SuperMineBombersTogether
     internal class Player : IMessageSerializable
     {
         public static List<Color> colorList = new List<Color> { Color.Blue, Color.Red, Color.Green, Color.Yellow, Color.Purple, Color.Orange, Color.Brown, Color.Pink, Color.Gray, Color.Black };
-        public int Id = 0;
-        public Vector2 Pos = new Vector2(0, 0);
-        public Vector2 Vel = new Vector2(0, 0);
+        public int id = 0;
+        public Vector2 pos = new Vector2(0, 0);
+        public Vector2 vel = new Vector2(0, 0);
         float defSpeed = 5; //How fast you walk by default
         int colorIndex = 0;
         
@@ -19,42 +19,43 @@ namespace SuperMineBombersTogether
 
         public Player(float x, float y, int colorIndex, int id)
         {
-            Pos = new Vector2(x, y);
+            pos = new Vector2(x, y);
             this.colorIndex = colorIndex;
-            Id = id;
+            this.id = id;
         }
 
         public void SetPosition(float x, float y)
         {
-            Pos = new Vector2(x, y);
+            pos = new Vector2(x, y);
         }
 
-        public void Update(float deltaTime, PlayerInputState input)
+        public void Update(float deltaTime, PlayerInputStateC2S input)
         {
-            Vel = input.direction * defSpeed;
-            Pos += Vel * deltaTime;
+            vel = input.direction * defSpeed;
+            pos += vel * deltaTime;
             
         }
 
         public void Draw()
         {
-            //Console.WriteLine($"Drawing player at {Pos}");
-            Graphics.DrawCircleV(Pos, 0.5f, colorList[colorIndex]);
+            Graphics.DrawCircleV(pos, 0.5f, colorList[colorIndex]);
         }
 
         public void Serialize(Message message)
         {
-            message.AddFloat(Pos.X);
-            message.AddFloat(Pos.Y);
-            message.AddFloat(Vel.X);
-            message.AddFloat(Vel.Y);
+            message.AddInt(id);
+            message.AddFloat(pos.X);
+            message.AddFloat(pos.Y);
+            message.AddFloat(vel.X);
+            message.AddFloat(vel.Y);
             message.AddInt(colorIndex);
         }
 
         public void Deserialize(Message message)
         {
-            Pos = new Vector2(message.GetFloat(), message.GetFloat());
-            Vel = new Vector2(message.GetFloat(), message.GetFloat());
+            id = message.GetInt();
+            pos = new Vector2(message.GetFloat(), message.GetFloat());
+            vel = new Vector2(message.GetFloat(), message.GetFloat());
             colorIndex = message.GetInt();
         }
     }

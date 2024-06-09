@@ -70,18 +70,6 @@ namespace SuperMineBombersTogether
             isDirty = true;
         }
 
-        //public void Serialize(Message message)
-        //{
-        //    message.AddInt((int)type);
-        //    message.AddFloat(health);
-        //}
-
-        //public void Deserialize(Message message)
-        //{
-        //    type = (CellType)message.GetInt();
-        //    health = message.GetFloat();
-        //}
-
         public void Serialize(Message message)
         {
             byte hp4bit = (byte)(health/100f * 0x0F);
@@ -95,7 +83,6 @@ namespace SuperMineBombersTogether
             type = (CellType)(b >> 4);
             byte hp4bit = (byte)(b & 0x0F);
             health = hp4bit / 16f * 100;
-
         }
 
         public static bool floatEquals(float a, float b)

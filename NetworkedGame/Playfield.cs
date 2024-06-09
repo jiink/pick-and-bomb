@@ -8,15 +8,16 @@ namespace SuperMineBombersTogether
 {
     public class Playfield : List<Cell>, IMessageSerializable
     {
-        const int width = 33;
-        const int height = 33;
+        const int width = 32;
+        const int height = 32;
         const int MAX = width * height;
+        const int maxCellsToSend = 32;
 
         public Playfield()
         {
             for (int i = 0; i < MAX; i++)
             {
-                Add(new Cell(Cell.CellType.Dirt));
+                Add(new Cell(Cell.CellType.Air));
             }
         }
 
@@ -26,7 +27,6 @@ namespace SuperMineBombersTogether
             {
                 this[i] = new Cell(Cell.CellType.Dirt);
             }
-            RiptideLogger.Log(LogType.Debug, $">>>>> {this[0].isDirty}");
         }
 
         public Cell this[int x, int y]
@@ -58,55 +58,66 @@ namespace SuperMineBombersTogether
             return this[col, row];
         }
 
-        //public void Serialize(Message message)
-        //{
-        //    int dirtyCellCount = 0;
-        //    for (int i = 0; i < Count; i++)
-        //    {
-        //        if (this[i].isDirty)
-        //        {
-        //            dirtyCellCount++;
-        //        }
-        //    }
-        //    message.AddInt(dirtyCellCount);
-        //    for (int i = 0; i < Count; i++)
-        //    {
-        //        if (this[i].isDirty)
-        //        {
-        //            message.AddInt(i);
-        //            message.AddSerializable(this[i]);
-        //            Cell c = this[i];
-        //            c.isDirty = false;
-        //            this[i] = c;
-        //        }
-        //    }
-        //    RiptideLogger.Log(LogType.Debug, $"Serialized {dirtyCellCount} dirty cells");
-        //}
-
-        //public void Deserialize(Message message)
-        //{
-        //    int dirtyCellCount = message.GetInt();
-        //    for (int i = 0; i < dirtyCellCount; i++)
-        //    {
-        //        int index = message.GetInt();
-        //        this[index] = message.GetSerializable<Cell>();
-        //    }
-        //}
-
         public void Serialize(Message message)
         {
-            //for (int i = 0; i < Count; i++)
-            //{
-            //    message.AddSerializable(this[i]);
-            //}
+            int dirtyCellCount = 0;
+            for (int i = 0; i < Count; i++)
+            {
+                if (this[i].isDirty)
+                {
+                    dirtyCellCount++;
+                }
+            }
+            if (dirtyCellCount > maxCellsToSend)
+            {
+                dirtyCellCount = maxCellsToSend;
+            }
+            message.AddInt(dirtyCellCount);
+            Console.WriteLine($"Gonna send {dirtyCellCount} cells");
+            int idx = 0;
+            while (dirtyCellCount > 0)
+            {
+                Trace.Assert(idx >= 0 && idx <= Count - 1);
+                if (this[idx].isDirty)
+                {
+                    message.AddInt(idx);
+                    message.AddSerializable(this[idx]);
+                    this[idx].isDirty = false;
+                    dirtyCellCount--;
+                }
+                idx++;
+            }
         }
 
         public void Deserialize(Message message)
         {
-            //for (int i = 0; i < Count; i++)
-            //{
-            //    this[i] = message.GetSerializable<Cell>();
-            //}
+            int dirtyCellCount = message.GetInt();
+            Console.WriteLine($"Deseruializing playfield {dirtyCellCount}c");
+            for (int i = 0; i < dirtyCellCount; i++)
+            {
+                int index = message.GetInt();
+                this[index] = message.GetSerializable<Cell>();
+            }
+        }
+
+        public bool IsDirty()
+        {
+            foreach (Cell c in this)
+            { 
+                if (c.isDirty)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public void MakeDirty()
+        {
+            foreach(Cell c in this)
+            {
+                c.isDirty = true;
+            }
         }
 
         public Playfield DeepCopy()
@@ -118,57 +129,6 @@ namespace SuperMineBombersTogether
             }
             return copy;
         }
-
-        public Playfield CalculateDelta(Playfield oldPlayfield)
-        {
-            int numMarkedDirty = 0;
-            Playfield delta = new Playfield();
-            for (int i = 0; i < Count; i++)
-            {
-                if (this[i] != oldPlayfield[i])
-                {
-                    Cell c = this[i];
-                    c.isDirty = true;
-                    delta[i] = c;
-                    numMarkedDirty++;
-                }
-            }
-            Console.WriteLine($"{this[MAX - 1]} == {oldPlayfield[MAX - 1]}? {this[MAX - 1] == oldPlayfield[MAX - 1]}.");
-            //Console.WriteLine($"Marked {numMarkedDirty} cells dirty");
-            return delta;
-        }
-
-        internal void ApplyDelta(Playfield delta)
-        {
-            Trace.Assert(delta.Count == Count && Count == MAX);
-            for (int i = 0; i < Count; i++)
-            {
-                if (delta[i].type != Cell.CellType.None)
-                {
-                    Cell cell = this[i];
-                    cell.type = delta[i].type;
-                    this[i] = cell;
-                }
-                if (delta[i].health != 0)
-                {
-                    Cell cell = this[i];
-                    cell.health = delta[i].health;
-                    this[i] = cell;
-                }
-            }
-        }
-
-        //public void ReportDelta()
-        //{
-        //    int diffCells = 0;
-        //    for (int i = 0; i < Count; i++)
-        //    {
-        //        if (this[i].type != Cell.CellType.None || this[i].health !=)
-        //        {
-        //            diffCells++;
-        //        }
-        //    }
-        //}
 
         public void Draw()
         {

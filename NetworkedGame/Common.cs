@@ -14,7 +14,10 @@ namespace SuperMineBombersTogether
             Heartbeat = 0,
             PlayerInput,
             PlayerAssign,
-            MatchState,
+            PlayerSetPos,
+            PlayerAdd,
+            EntityUpdate,
+            PlayfieldUpdate
         }
     }
 }

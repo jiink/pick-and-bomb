@@ -20,7 +20,7 @@ namespace SuperMineBombersTogether
     class ServerSide
     {
         static MatchState matchState = new MatchState();
-        static List<PlayerInputState> playerInputs = new List<PlayerInputState>();
+        static List<PlayerInputStateC2S> playerInputs = new List<PlayerInputStateC2S>();
         static int counter = 0;
         static public void Start()
         {
@@ -30,6 +30,7 @@ namespace SuperMineBombersTogether
             server.ClientDisconnected += OnClientDisconnect;
             Timer timer = new Timer(FixedUpdate, server, 0, 1000 / Common.tickRate);
             Timer heartbeatTimer = new Timer(Heartbeat, server, 0, 500);
+            matchState.playfield.Fill();
         }
 
         private static void OnClientDisconnect(object? sender, ServerDisconnectedEventArgs e)
@@ -42,12 +43,9 @@ namespace SuperMineBombersTogether
             if (sender == null) return;
             var server = (Server)sender;
             Console.WriteLine($"Client {e.Client.ToString} (id: {e.Client.Id}) connected!");
-            matchState.AddPlayer(new Player(0, 0, server.ClientCount, e.Client.Id));
-            // Assign player number to client
-            //Message message = Message.Create(MessageSendMode.Reliable, (ushort)PlayerAssignS2C.Id);
-            //PlayerAssignS2C playerAssign = new PlayerAssignS2C(matchState.Players.Count - 1);
-            //message.AddSerializable(playerAssign);
-            //server.Send(message, e.Client);
+            Player newP = new Player(0, 0, server.ClientCount, e.Client.Id);
+            matchState.AddPlayer(newP);
+            matchState.playfield.MakeDirty();
         }
 
         private static void Heartbeat(object? state)
@@ -57,7 +55,7 @@ namespace SuperMineBombersTogether
                 return;
             }
             var server = (Server)state;
-            Message message = Message.Create(MessageSendMode.Reliable, 0);
+            Message message = Message.Create(MessageSendMode.Reliable, (ushort)MessageId.Heartbeat);
             message.AddInt(99);
             server.SendToAll(message);
         }
@@ -65,9 +63,9 @@ namespace SuperMineBombersTogether
         [MessageHandler((ushort)MessageId.PlayerInput)]
         private static void HandlePlayerInput(ushort u, Message message)
         {
-            PlayerInputState playerInput = message.GetSerializable<PlayerInputState>();
+            PlayerInputStateC2S playerInput = message.GetSerializable<PlayerInputStateC2S>();
             playerInput.clientId = u;
-            //Debug.WriteLine($"Got message from {u}: {playerInput}");
+            Debug.WriteLine($"Got message from {u}: {playerInput}");
             // Check input list to see if we have an input from this client
             bool found = false;
             for (int i = 0; i < playerInputs.Count; i++)
@@ -94,17 +92,26 @@ namespace SuperMineBombersTogether
             var server = (Server)state;
             server.Update();
 
-            matchState.Update(1f / tickRate, playerInputs);
+            matchState.Update(false, 1f / tickRate, playerInputs);
             playerInputs.Clear(); // Consume the inputs
 
-            Message message = Message.Create(MessageSendMode.Unreliable, (ushort)MessageId.MatchState);
-            message.AddSerializable(matchState);
-            if (counter++ > 10)
-            {
-                RiptideLogger.Log(LogType.Debug, $"Server sending {(message.WrittenBits / 8) * tickRate} byte/s");
-                counter = 0;
+            // Update clients
+            Message entUpdate = Message.Create(MessageSendMode.Unreliable, (ushort)MessageId.EntityUpdate);
+            entUpdate.AddInt(matchState.players.Count);
+            foreach (Player p in matchState.players)
+            {                
+                entUpdate.AddInt(p.id);
+                entUpdate.AddFloat(p.pos.X);
+                entUpdate.AddFloat(p.pos.Y);
             }
-            server.SendToAll(message);
+            server.SendToAll(entUpdate);
+
+            if (matchState.playfield.IsDirty())
+            {
+                Message pfieldUpdate = Message.Create(MessageSendMode.Reliable, (ushort)MessageId.PlayfieldUpdate);
+                pfieldUpdate.AddSerializable(matchState.playfield);
+                server.SendToAll(pfieldUpdate);
+            }
         }
     }
 }

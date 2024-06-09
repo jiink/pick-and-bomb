@@ -9,7 +9,7 @@ using static SuperMineBombersTogether.Common;
 
 namespace SuperMineBombersTogether.PacketTypes
 {
-    internal class PlayerInputState : IMessageSerializable
+    internal class PlayerInputStateC2S : IMessageSerializable
     {
         public const MessageId Id = MessageId.PlayerInput;
 
@@ -19,9 +19,9 @@ namespace SuperMineBombersTogether.PacketTypes
         public bool attackPressed = false;
         public bool attackReleased = false;
 
-        public PlayerInputState() { }
+        public PlayerInputStateC2S() { }
 
-        public PlayerInputState(Vector2 direction, bool attack, bool attackPressed, bool attackReleased)
+        public PlayerInputStateC2S(Vector2 direction, bool attack, bool attackPressed, bool attackReleased)
         {
             this.direction = direction;
             this.attack = attack;

@@ -1,4 +1,5 @@
 ﻿using Riptide;
+using SuperMineBombersTogether.Bombs;
 using SuperMineBombersTogether.PacketTypes;
 using System;
 using System.Collections.Generic;
@@ -10,18 +11,16 @@ using System.Threading.Tasks;
 
 namespace SuperMineBombersTogether
 {
-    internal class MatchState : IMessageSerializable
+    internal class MatchState
     {
         public List<Player> players;
+        public List<AbstractBomb> bombs;
         public Playfield playfield;
-        //public Playfield prevPlayfield; // For calculating deltas
 
         public MatchState()
         {
             players = new List<Player>();
             playfield = new Playfield();
-            //playfield.Fill();
-            //prevPlayfield = new Playfield();
         }
 
         public void Update(bool isClient, float deltaTime, List<PlayerInputStateC2S> inputs)
@@ -78,28 +77,9 @@ namespace SuperMineBombersTogether
             player.SetPosition(x, y);
         }
 
-        public void Serialize(Message message)
+        internal void Explode(Vector2 pos)
         {
-            message.AddInt(players.Count);
-            foreach (Player player in players)
-            {
-                message.AddSerializable(player);
-            }
-            //message.AddSerializable(playfield);
-        }
-
-        public void Deserialize(Message message)
-        {
-            int playerCount = message.GetInt();
-            for (int i = 0; i < playerCount; i++)
-            {
-                Player p = message.GetSerializable<Player>();
-                players.Add(p);
-            }
-            //Playfield pfdelta = message.GetSerializable<Playfield>();
-            //playfield.ApplyDelta(pfdelta);
-            //playfield = message.GetSerializable<Playfield>();
-            //prevPlayfield = playfield.DeepCopy();
+            throw new NotImplementedException();
         }
     }
 }

@@ -22,6 +22,7 @@ namespace SuperMineBombersTogether.Bombs
         int radius = 0;
         int price = 0;
         int colorIndex = 0;
+        public bool exploded = false;
 
         public AbstractBomb() { }
         public AbstractBomb(int id, Vector2 pos, Vector2 vel)
@@ -29,11 +30,12 @@ namespace SuperMineBombersTogether.Bombs
             this.id = id;
             this.pos = pos;
             this.vel = vel;
+            fuseTimer = startingFuse;
         }
 
-        protected abstract bool Detonate(ref MatchState m);
+        protected abstract bool Detonate(MatchState m);
 
-        protected abstract void Update(float deltaTime, MatchState m);
+        public abstract void Update(float deltaTime, MatchState m);
 
         protected void RollAndCollide(float deltaTime, MatchState m)
         {
@@ -46,6 +48,12 @@ namespace SuperMineBombersTogether.Bombs
                 vel = Vector2.Zero;
                 pos = prevPos;
             }
+        }
+
+        protected void FuseTick(float deltaTime, MatchState m)
+        {
+            fuseTimer -= deltaTime;
+            if (fuseTimer <= 0) Detonate(m);
         }
 
         protected void Draw()

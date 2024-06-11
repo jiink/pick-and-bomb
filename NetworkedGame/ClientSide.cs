@@ -18,6 +18,7 @@ namespace SuperMineBombersTogether
     {
         static MatchState matchState = new();
         static Camera2D camera = new();
+        static bool attackPressed = false;
         static public void Start()
         {
             Client client = new Client();
@@ -30,6 +31,10 @@ namespace SuperMineBombersTogether
 
             while (!Window.ShouldClose())
             {
+                if (!attackPressed && Input.IsKeyPressed(KeyboardKey.Space))
+                {
+                    attackPressed = true;
+                }
                 Graphics.BeginDrawing();
                 Graphics.BeginMode2D(camera);
                 Graphics.ClearBackground(Color.RayWhite);
@@ -140,9 +145,10 @@ namespace SuperMineBombersTogether
                 PlayerInputStateC2S playerMove = new PlayerInputStateC2S(
                     moveDir,
                     Input.IsKeyDown(KeyboardKey.Space),
-                    Input.IsKeyPressed(KeyboardKey.Space),
+                    attackPressed,
                     Input.IsKeyReleased(KeyboardKey.Space)
                 );
+                attackPressed = false;
                 Message message = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerInputStateC2S.Id);
                 message.AddSerializable(playerMove);
                 client.Send(message);

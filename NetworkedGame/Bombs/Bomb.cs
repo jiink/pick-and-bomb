@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,15 +14,22 @@ namespace SuperMineBombersTogether.Bombs
         int radius = 6;
         int price = 0;
 
-        protected override bool Detonate(ref MatchState m)
+        public Bomb(int id, Vector2 pos, Vector2 vel) : base(id, pos, vel)
         {
-            m.Explode(pos);
+        }
+
+        protected override bool Detonate(MatchState m)
+        {
+            m.Explode(pos, radius, damage);
+            exploded = true;
             return true;
         }
 
-        protected override void Update(float deltaTime, MatchState m)
+        public override void Update(float deltaTime, MatchState m)
         {
+            if (exploded) { return; }
             RollAndCollide(deltaTime, m);
+            FuseTick(deltaTime, m);
         }
     }
 }

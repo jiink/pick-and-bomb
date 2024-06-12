@@ -10,14 +10,14 @@ namespace SuperMineBombersTogether.Bombs
 {
     internal class Bomb : AbstractBomb
     {
-        float startingFuse = 2.0f;
+        static float startingFuse = 2.0f;
         int damage = 150;
         int radius = 6;
         int price = 0;
 
         public Bomb() { }
 
-        public Bomb(int id, Vector2 pos, Vector2 vel) : base(id, pos, vel)
+        public Bomb(int id, Vector2 pos, Vector2 vel) : base(id, pos, vel, startingFuse)
         {
         }
 

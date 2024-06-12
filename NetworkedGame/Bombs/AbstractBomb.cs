@@ -17,8 +17,8 @@ namespace SuperMineBombersTogether.Bombs
         public Vector2 pos = new Vector2(0);
         public Vector2 vel = new Vector2(0);
         float fuseTimer = 0;
-        float startingFuse = 0;
-        float friction = 0.7f;
+        float startingFuse;
+        float friction = 0.9f;
         int damage = 0;
         int radius = 0;
         int price = 0;
@@ -26,12 +26,12 @@ namespace SuperMineBombersTogether.Bombs
         public bool exploded = false;
 
         public AbstractBomb() { }
-        public AbstractBomb(int id, Vector2 pos, Vector2 vel)
+        public AbstractBomb(int id, Vector2 pos, Vector2 vel, float startingFuse)
         {
             this.id = id;
             this.pos = pos;
             this.vel = vel;
-            fuseTimer = 1f;
+            fuseTimer = startingFuse;
         }
 
         protected abstract bool Detonate(MatchState m);

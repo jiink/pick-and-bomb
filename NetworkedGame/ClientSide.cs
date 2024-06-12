@@ -11,6 +11,9 @@ using SuperMineBombersTogether.PacketTypes;
 using System.Reflection.Metadata;
 using System.Numerics;
 using Raylib_CSharp.Camera.Cam2D;
+using SuperMineBombersTogether.Bombs;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace SuperMineBombersTogether
 {
@@ -49,10 +52,10 @@ namespace SuperMineBombersTogether
 
         private static void InitCamera(ref Camera2D camera)
         {
-            camera.Target = new Vector2(32, 32);
+            camera.Target = new Vector2(0, 0);
             camera.Offset = new Vector2(Window.GetScreenWidth() / 2, Window.GetScreenHeight() / 2);
             camera.Rotation = 0.0f;
-            camera.Zoom = 6.0f;
+            camera.Zoom = 20.0f;
         }
 
         [MessageHandler((ushort)MessageId.Heartbeat)]
@@ -64,14 +67,14 @@ namespace SuperMineBombersTogether
         [MessageHandler((ushort)MessageId.EntityUpdate)]
         private static void HandleEntityUpdate(Message message)
         {
-            int numEnts = message.GetInt();
-            for (int i = 0; i < numEnts; i++)
+            int numPlayers = message.GetInt();
+            for (int i = 0; i < numPlayers; i++)
             {
-                Player ent = message.GetSerializable<Player>();
+                Player p = message.GetSerializable<Player>();
                 int index = -1;
                 for (int j = 0; j < matchState.players.Count; j++)
                 {
-                    if (matchState.players[j].id == ent.id)
+                    if (matchState.players[j].id == p.id)
                     {
                         index = j;
                         break;
@@ -79,11 +82,39 @@ namespace SuperMineBombersTogether
                 }
                 if (index != -1)
                 {
-                    matchState.players[index] = ent;
+                    matchState.players[index] = p;
                 }
                 else
                 {
-                    matchState.AddPlayer(ent);
+                    matchState.AddPlayer(p);
+                }
+            }
+            int numBombs = message.GetInt();
+            for (int i = 0; i < numBombs; i++)
+            {
+                Type bType = AbstractBomb.GetTypeFromId(message.GetInt());
+                Trace.Assert(bType != null);
+                MethodInfo method = typeof(Message).GetMethod("GetSerializable");
+                MethodInfo generic = method.MakeGenericMethod(bType);
+                object bomb = generic.Invoke(message, null);
+                AbstractBomb b = (AbstractBomb)bomb;
+                //Bomb b = message.GetSerializable<Bomb>();
+                int index = -1;
+                for (int j = 0; j < matchState.bombs.Count; j++)
+                {
+                    if (matchState.bombs[j].id == b.id)
+                    {
+                        index = j;
+                        break;
+                    }
+                }
+                if (index != -1)
+                {
+                    matchState.bombs[index] = b;
+                }
+                else
+                {
+                    matchState.SpawnBomb(b);
                 }
             }
         }

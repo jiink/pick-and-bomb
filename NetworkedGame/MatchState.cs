@@ -87,11 +87,15 @@ namespace SuperMineBombersTogether
 
         public void Draw()
         {
-            foreach (Player player in players.ToList())
+            playfield.Draw();
+            foreach (var player in players.ToList())
             {
                 player.Draw();
             }
-            playfield.Draw();
+            foreach (var b in bombs.ToList())
+            {
+                b.Draw();
+            }
         }
 
         public void UpdatePlayerPosition(int playerNum, float x, float y)

@@ -14,6 +14,7 @@ using System.Numerics;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Riptide.Utils;
+using SuperMineBombersTogether.Bombs;
 
 namespace SuperMineBombersTogether
 {
@@ -101,6 +102,13 @@ namespace SuperMineBombersTogether
             foreach (Player p in matchState.players)
             {                
                 entUpdate.AddSerializable(p);
+            }
+            entUpdate.AddInt(matchState.bombs.Count);
+            foreach (var b in matchState.bombs)
+            {
+                int classId = AbstractBomb.GetClassId(b.GetType());
+                entUpdate.AddInt(classId);
+                entUpdate.AddSerializable(b);
             }
             server.SendToAll(entUpdate);
 

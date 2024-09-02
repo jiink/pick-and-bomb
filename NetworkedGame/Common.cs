@@ -19,5 +19,11 @@ namespace SuperMineBombersTogether
             EntityUpdate,
             PlayfieldUpdate
         }
+        public enum EntDict
+        {
+            NONE = 0,
+            BOMB,
+            TINY_BOMB,
+        }
     }
 }

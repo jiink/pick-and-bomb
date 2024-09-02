@@ -41,7 +41,7 @@ namespace SuperMineBombersTogether
                         if (input.attackPressed)
                         {
                             Console.WriteLine("BOMB!");
-                            Bomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
+                            TinyBomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
                             SpawnBomb(newBomb);
                         }
                         // If you push against a solid cell you start mining it
@@ -59,7 +59,7 @@ namespace SuperMineBombersTogether
             for (int i = 0; i < bombs.Count; i++)
             {
                 bombs[i].Update(deltaTime, this);
-                if (bombs[i].exploded)
+                if (bombs[i].Exploded)
                 {
                     bombsToCleanUp.Add(i);
                 }

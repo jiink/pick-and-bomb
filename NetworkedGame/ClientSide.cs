@@ -38,6 +38,10 @@ namespace SuperMineBombersTogether
                 {
                     attackPressed = true;
                 }
+                if (client.Id != 0 && matchState.players.Count > client.Id-1)
+                {
+                    camera.Target = Vector2.Lerp(camera.Target, matchState.players[client.Id-1].pos, amount: 0.01f);
+                }
                 Graphics.BeginDrawing();
                 Graphics.BeginMode2D(camera);
                 Graphics.ClearBackground(Color.RayWhite);
@@ -52,10 +56,10 @@ namespace SuperMineBombersTogether
 
         private static void InitCamera(ref Camera2D camera)
         {
-            camera.Target = new Vector2(0, 0);
+            camera.Target = new Vector2(16, 16);
             camera.Offset = new Vector2(Window.GetScreenWidth() / 2, Window.GetScreenHeight() / 2);
             camera.Rotation = 0.0f;
-            camera.Zoom = 20.0f;
+            camera.Zoom = 10.0f;
         }
 
         [MessageHandler((ushort)MessageId.Heartbeat)]
@@ -92,31 +96,46 @@ namespace SuperMineBombersTogether
             int numBombs = message.GetInt();
             for (int i = 0; i < numBombs; i++)
             {
-                Type bType = AbstractBomb.GetTypeFromId(message.GetInt());
-                Trace.Assert(bType != null);
-                MethodInfo method = typeof(Message).GetMethod("GetSerializable");
-                MethodInfo generic = method.MakeGenericMethod(bType);
-                object bomb = generic.Invoke(message, null);
-                AbstractBomb b = (AbstractBomb)bomb;
-                //Bomb b = message.GetSerializable<Bomb>();
-                int index = -1;
-                for (int j = 0; j < matchState.bombs.Count; j++)
+                EntDict entDictId = (EntDict)message.GetInt();
+                AbstractBomb b;
+                switch (entDictId)
                 {
-                    if (matchState.bombs[j].id == b.id)
-                    {
-                        index = j;
+                    case EntDict.BOMB:
+                        b = message.GetSerializable<Bomb>();
                         break;
-                    }
+                    case EntDict.TINY_BOMB:
+                        b = message.GetSerializable<TinyBomb>();
+                        break;
+                    default:
+                        Console.WriteLine("NOT FOUND IN ENTDICT! SKIPPING.");
+                        continue;
+                        break;
                 }
-                if (index != -1)
+                int bIdx = FindBombIndexFromId(matchState.bombs, b.Id);
+                
+                if (bIdx != -1)
                 {
-                    matchState.bombs[index] = b;
+                    matchState.bombs[bIdx] = b;
                 }
                 else
                 {
                     matchState.SpawnBomb(b);
                 }
             }
+        }
+
+        private static int FindBombIndexFromId(List<AbstractBomb> bombs, int id)
+        {
+            int index = -1;
+            for (int j = 0; j < bombs.Count; j++)
+            {
+                if (bombs[j].Id == id)
+                {
+                    index = j;
+                    break;
+                }
+            }
+            return index;
         }
 
         [MessageHandler((ushort)MessageId.PlayfieldUpdate)]
@@ -142,13 +161,30 @@ namespace SuperMineBombersTogether
                 Console.WriteLine("State is null in FixedUpdate");
                 return;
             }
-            var client = (Client)state;
+            if (state is not Client client)
+            {
+                Console.WriteLine("State is not a Client in FixedUpdate");
+                return;
+            }
             if (client == null)
             {
                 Console.WriteLine("Client is null in FixedUpdate");
                 return;
             }
-            client.Update();
+            //if (!client.IsConnected || client.IsNotConnected)
+            //{
+            //    Console.WriteLine("Client is not connnected");
+            //    return;
+            //}
+            try
+            {
+                client.Update();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("WTF!!!!!!!!"); Console.WriteLine(ex.ToString());
+                return;
+            }
 
             if (client.IsConnected)
             {
@@ -181,6 +217,11 @@ namespace SuperMineBombersTogether
                 );
                 attackPressed = false;
                 Message message = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerInputStateC2S.Id);
+                if (message == null)
+                {
+                    Console.WriteLine("Failed to create message");
+                    return;
+                }
                 message.AddSerializable(playerMove);
                 client.Send(message);
             }

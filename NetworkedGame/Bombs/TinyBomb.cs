@@ -9,19 +9,19 @@ using static SuperMineBombersTogether.Common;
 
 namespace SuperMineBombersTogether.Bombs
 {
-    internal class Bomb : AbstractBomb
+    internal class TinyBomb : AbstractBomb
     {
-        public override EntDict EntDictId => EntDict.BOMB;
+        public override EntDict EntDictId => EntDict.TINY_BOMB;
         protected override float StartingFuse => 2.0f;
-        protected override int Damage => 150;
-        protected override int Radius => 6;
+        protected override int Damage => 50;
+        protected override int Radius => 3;
         protected override float Friction => 0.9f;
-        protected override int Price => 3;
-        protected override int ColorIndex => 1;
+        protected override int Price => 1;
+        protected override int ColorIndex => 2;
 
-        public Bomb() { }
+        public TinyBomb() { }
 
-        public Bomb(int id, Vector2 pos, Vector2 vel) : base(id, pos, vel)
+        public TinyBomb(int id, Vector2 pos, Vector2 vel) : base(id, pos, vel)
         {
         }
 

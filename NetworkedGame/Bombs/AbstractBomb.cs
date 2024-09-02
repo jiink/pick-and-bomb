@@ -8,30 +8,32 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using static SuperMineBombersTogether.Cell;
+using static SuperMineBombersTogether.Common;
 
 namespace SuperMineBombersTogether.Bombs
 {
     internal abstract class AbstractBomb : IMessageSerializable
     {
-        public int id = 0;
-        public Vector2 pos = new Vector2(0);
-        public Vector2 vel = new Vector2(0);
-        float fuseTimer = 0;
-        float startingFuse;
-        float friction = 0.9f;
-        int damage = 0;
-        int radius = 0;
-        int price = 0;
-        int colorIndex = 0;
-        public bool exploded = false;
+        abstract public EntDict EntDictId { get; }
+        public int Id { get; set; }
+        public Vector2 Pos { get; set; }
+        public Vector2 Vel { get; set; }
+        private float fuseTimer;
+        protected abstract float StartingFuse { get; }
+        protected abstract float Friction { get; }
+        protected abstract int Damage { get; }
+        protected abstract int Radius { get; }
+        protected abstract int Price { get; }
+        protected virtual int ColorIndex { get; set; }
+        public bool Exploded { get; protected set; } = false;
 
         public AbstractBomb() { }
-        public AbstractBomb(int id, Vector2 pos, Vector2 vel, float startingFuse)
+        public AbstractBomb(int id, Vector2 pos, Vector2 vel)
         {
-            this.id = id;
-            this.pos = pos;
-            this.vel = vel;
-            fuseTimer = startingFuse;
+            Id = id;
+            Pos = pos;
+            Vel = vel;
+            fuseTimer = StartingFuse;
         }
 
         protected abstract bool Detonate(MatchState m);
@@ -40,14 +42,14 @@ namespace SuperMineBombersTogether.Bombs
 
         protected void RollAndCollide(float deltaTime, MatchState m)
         {
-            if (vel == Vector2.Zero) return;
-            vel *= friction;
-            var prevPos = pos;
-            pos += vel * deltaTime;
-            if (m.playfield.GetCellAtPos(pos)?.type != CellType.Air)
+            if (Vel == Vector2.Zero) return;
+            Vel *= Friction;
+            var prevPos = Pos;
+            Pos += Vel * deltaTime;
+            if (m.playfield.GetCellAtPos(Pos)?.type != CellType.Air)
             {
-                vel = Vector2.Zero;
-                pos = prevPos;
+                Vel = Vector2.Zero;
+                Pos = prevPos;
             }
         }
 
@@ -59,53 +61,25 @@ namespace SuperMineBombersTogether.Bombs
 
         public void Draw()
         {
-            Graphics.DrawCircleV(pos, 0.3f, Player.colorList[colorIndex]);
+            Graphics.DrawCircleV(Pos, 0.3f, Player.colorList[ColorIndex]);
         }
 
         public void Deserialize(Message message)
         {
-            id = message.GetInt();
-            pos = new Vector2(message.GetFloat(), message.GetFloat());
-            vel = new Vector2(message.GetFloat(), message.GetFloat());
-            colorIndex = message.GetInt();
+            Id = message.GetInt();
+            Pos = new Vector2(message.GetFloat(), message.GetFloat());
+            Vel = new Vector2(message.GetFloat(), message.GetFloat());
+            ColorIndex = message.GetInt();
         }
 
         public void Serialize(Message message)
         {
-            message.AddInt(id);
-            message.AddFloat(pos.X);
-            message.AddFloat(pos.Y);
-            message.AddFloat(vel.X);
-            message.AddFloat(vel.Y);
-            message.AddInt(colorIndex);
-        }
-
-        public static int GetClassId(Type type)
-        {
-            if (!typeof(AbstractBomb).IsAssignableFrom(type))
-            {
-                throw new ArgumentException("Type must be a subclass of AbstractBomb", nameof(type));
-            }
-
-            return type.FullName.GetHashCode();
-        }
-
-        public static Type GetTypeFromId(int id)
-        {
-            var types = GetSubclassesOfAbstractBomb();
-            return types.FirstOrDefault(t => t.FullName.GetHashCode() == id);
-        }
-
-        public static IEnumerable<Type> GetSubclassesOfAbstractBomb()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            foreach (Type type in assembly.GetTypes())
-            {
-                if (type.IsSubclassOf(typeof(AbstractBomb)))
-                {
-                    yield return type;
-                }
-            }
+            message.AddInt(Id);
+            message.AddFloat(Pos.X);
+            message.AddFloat(Pos.Y);
+            message.AddFloat(Vel.X);
+            message.AddFloat(Vel.Y);
+            message.AddInt(ColorIndex);
         }
     }
 }

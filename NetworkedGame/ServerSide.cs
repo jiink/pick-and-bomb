@@ -96,7 +96,7 @@ namespace SuperMineBombersTogether
             matchState.Update(false, 1f / tickRate, playerInputs);
             playerInputs.Clear(); // Consume the inputs
 
-            // Update clients
+            // Update clients with all entities (Players and Bombs)
             Message entUpdate = Message.Create(MessageSendMode.Unreliable, (ushort)MessageId.EntityUpdate);
             entUpdate.AddInt(matchState.players.Count);
             foreach (Player p in matchState.players)
@@ -106,8 +106,7 @@ namespace SuperMineBombersTogether
             entUpdate.AddInt(matchState.bombs.Count);
             foreach (var b in matchState.bombs)
             {
-                int classId = AbstractBomb.GetClassId(b.GetType());
-                entUpdate.AddInt(classId);
+                entUpdate.AddInt((int)b.EntDictId);
                 entUpdate.AddSerializable(b);
             }
             server.SendToAll(entUpdate);

@@ -38,7 +38,7 @@ namespace SuperMineBombersTogether
                 Graphics.EndDrawing();
             }
 
-            if (choice == "host")
+            if (choice == "host")   
             {
                 ServerSide.Start();
                 ClientSide.Start();

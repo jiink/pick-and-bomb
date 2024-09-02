@@ -8,14 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Shaderpractice\on shadertoy.glsl" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="Shaderpractice\on shadertoy.glsl" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Raylib-CSharp" Version="3.0.6" />
     <PackageReference Include="RiptideNetworking.Riptide" Version="2.2.0" />
   </ItemGroup>

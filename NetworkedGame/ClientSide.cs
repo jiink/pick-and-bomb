@@ -171,11 +171,6 @@ namespace SuperMineBombersTogether
                 Console.WriteLine("Client is null in FixedUpdate");
                 return;
             }
-            //if (!client.IsConnected || client.IsNotConnected)
-            //{
-            //    Console.WriteLine("Client is not connnected");
-            //    return;
-            //}
             try
             {
                 client.Update();
@@ -185,47 +180,47 @@ namespace SuperMineBombersTogether
                 Console.WriteLine("WTF!!!!!!!!"); Console.WriteLine(ex.ToString());
                 return;
             }
-
-            if (client.IsConnected)
+            if (!client.IsConnected)
             {
-                Vector2 moveDir = new Vector2(0, 0);
-                if (Input.IsKeyDown(KeyboardKey.Right))
-                {
-                    moveDir.X += 1;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Left))
-                {
-                    moveDir.X -= 1;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Up))
-                {
-                    moveDir.Y -= 1;
-                }
-                if (Input.IsKeyDown(KeyboardKey.Down))
-                {
-                    moveDir.Y += 1;
-                }
-                if (moveDir.Length() > 0)
-                {
-                    moveDir = Vector2.Normalize(moveDir);
-                }
-                PlayerInputStateC2S playerMove = new PlayerInputStateC2S(
-                    moveDir,
-                    Input.IsKeyDown(KeyboardKey.Space),
-                    attackPressed,
-                    Input.IsKeyReleased(KeyboardKey.Space)
-                );
-                attackPressed = false;
-                Message message = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerInputStateC2S.Id);
-                if (message == null)
-                {
-                    Console.WriteLine("Failed to create message");
-                    return;
-                }
-                message.AddSerializable(playerMove);
-                client.Send(message);
+                return;
             }
-        }
 
+            Vector2 moveDir = new Vector2(0, 0);
+            if (Input.IsKeyDown(KeyboardKey.Right))
+            {
+                moveDir.X += 1;
+            }
+            if (Input.IsKeyDown(KeyboardKey.Left))
+            {
+                moveDir.X -= 1;
+            }
+            if (Input.IsKeyDown(KeyboardKey.Up))
+            {
+                moveDir.Y -= 1;
+            }
+            if (Input.IsKeyDown(KeyboardKey.Down))
+            {
+                moveDir.Y += 1;
+            }
+            if (moveDir.Length() > 0)
+            {
+                moveDir = Vector2.Normalize(moveDir);
+            }
+            PlayerInputStateC2S playerMove = new PlayerInputStateC2S(
+                moveDir,
+                Input.IsKeyDown(KeyboardKey.Space),
+                attackPressed,
+                Input.IsKeyReleased(KeyboardKey.Space)
+            );
+            attackPressed = false;
+            Message message = Message.Create(MessageSendMode.Unreliable, (ushort)PlayerInputStateC2S.Id);
+            if (message == null)
+            {
+                Console.WriteLine("Failed to create message");
+                return;
+            }
+            message.AddSerializable(playerMove);
+            client.Send(message);
+        }
     }
 }

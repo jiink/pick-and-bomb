@@ -37,22 +37,19 @@ namespace SuperMineBombersTogether
                     if (player.id == input.clientId)
                     {
                         found = true;
-                        player.Update(deltaTime, input);
+                        player.Update(deltaTime, input, playfield);
                         if (input.attackPressed)
                         {
                             Console.WriteLine("BOMB!");
                             TinyBomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
                             SpawnBomb(newBomb);
                         }
-                        // If you push against a solid cell you start mining it
-                        const float miningSpeed = 300f; // Health per second
-                        playfield.GetCellAtPos(player.pos)?.Damage(deltaTime * miningSpeed);
                         break;
                     }
                 }
                 if (!found)
                 {
-                    player.Update(deltaTime, new PlayerInputStateC2S());
+                    player.Update(deltaTime, new PlayerInputStateC2S(), playfield);
                 }
             }
             var bombsToCleanUp = new List<int>();

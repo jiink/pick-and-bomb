@@ -41,6 +41,13 @@ namespace SuperMineBombersTogether
             }
         }
 
+        public bool IsSolidCellAtPoint(Vector2 worldPos)
+        {
+            var c = GetCellAtPos(worldPos);
+            if (c is null) { return true; }
+            return c.IsSolid;
+        }
+
         public Cell? GetCellAtPos(Vector2 worldPos)
         {
             const float cellSize = 1;

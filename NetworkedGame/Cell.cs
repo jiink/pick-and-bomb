@@ -38,6 +38,7 @@ namespace SuperMineBombersTogether
         public CellType type;
         public float health = 100;
         public bool isDirty = false;
+        public bool IsSolid => cellProperties[type].solid;
 
         public Cell()
         {

@@ -3,6 +3,7 @@ using Raylib_CSharp.Rendering;
 using Riptide;
 using SuperMineBombersTogether.PacketTypes;
 using System.Numerics;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace SuperMineBombersTogether
 {
@@ -29,11 +30,32 @@ namespace SuperMineBombersTogether
             pos = new Vector2(x, y);
         }
 
-        public void Update(float deltaTime, PlayerInputStateC2S input)
+        public void Update(float deltaTime, PlayerInputStateC2S input, Playfield pfield)
         {
             vel = input.direction * defSpeed;
-            pos += vel * deltaTime;
-            
+            var desiredPos = pos + vel * deltaTime;
+            var destination = new Vector2(desiredPos.X, desiredPos.Y);
+            if (pfield.IsSolidCellAtPoint(desiredPos))
+            {
+                vel = Vector2.Zero;
+            }
+            if (pfield.IsSolidCellAtPoint(new Vector2(desiredPos.X, pos.Y)))
+            {
+                destination.X = pos.X;
+            }
+            if (pfield.IsSolidCellAtPoint(new Vector2(pos.X, desiredPos.Y)))
+            {
+                destination.Y = pos.Y;
+            }
+            if (pfield.IsSolidCellAtPoint(destination))
+            {
+                destination = pos;
+            }
+            pos = destination;
+
+            // If you push against a solid cell you start mining it
+            const float miningSpeed = 300f; // Health per second
+            pfield.GetCellAtPos(desiredPos)?.Damage(deltaTime * miningSpeed);
         }
 
         public void Draw()

@@ -41,7 +41,7 @@ namespace SuperMineBombersTogether
                         if (input.attackPressed)
                         {
                             Console.WriteLine("BOMB!");
-                            TinyBomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
+                            Bomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
                             SpawnBomb(newBomb);
                         }
                         break;
@@ -75,6 +75,7 @@ namespace SuperMineBombersTogether
         public void AddPlayer(Player player)
         {
             players.Add(player);
+            player.pos = playfield.spawnPoints[players.Count - 1];
         }
 
         public void RemovePlayer(Player player)
@@ -128,6 +129,16 @@ namespace SuperMineBombersTogether
                 if (cell.type  == Cell.CellType.Air) { continue; }
                 float cellHp = cell.health;
                 cell.Damage(damage);
+                // If there are any players in this cell, damage them too
+                for (int j = 0; j < players.Count; j++)
+                {
+                    var dist = (players[j].pos - testPt).Length();
+                    Console.WriteLine($"Dist: {dist}");
+                    if (dist < stepSize)
+                    {
+                        players[j].Damage((int)damage);
+                    }
+                }
                 // Let the ray be stopped if the cell was not destroyed.
                 if (cell.type != Cell.CellType.Air)
                 {

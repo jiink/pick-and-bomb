@@ -12,6 +12,13 @@ namespace SuperMineBombersTogether
         const int height = 32;
         const int MAX = width * height;
         const int maxCellsToSend = 32;
+        public readonly List<Vector2> spawnPoints = new()
+        {
+            new Vector2(2, 2),
+            new Vector2(width - 2, 2),
+            new Vector2(2, height - 2),
+            new Vector2(width - 2, height - 2)
+        };
 
         public Playfield()
         {
@@ -26,6 +33,17 @@ namespace SuperMineBombersTogether
             for (int i = 0; i < MAX; i++)
             {
                 this[i] = new Cell(Cell.CellType.Dirt);
+            }
+            // A bordering wall.
+            for (int i = 0; i < width; i++)
+            {
+                this[i] = new Cell(Cell.CellType.Wall);
+                this[i + width * (height - 1)] = new Cell(Cell.CellType.Wall);
+            }
+            for (int i = 0; i < height; i++)
+            {
+                this[i * width] = new Cell(Cell.CellType.Wall);
+                this[i * width + width - 1] = new Cell(Cell.CellType.Wall);
             }
         }
 

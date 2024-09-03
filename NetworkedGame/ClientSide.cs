@@ -156,7 +156,7 @@ namespace SuperMineBombersTogether
 
         private static void FixedUpdate(object? state)
         {
-            if (state == null)
+            if (state is null)
             {
                 Console.WriteLine("State is null in FixedUpdate");
                 return;
@@ -166,7 +166,7 @@ namespace SuperMineBombersTogether
                 Console.WriteLine("State is not a Client in FixedUpdate");
                 return;
             }
-            if (client == null)
+            if (client is null)
             {
                 Console.WriteLine("Client is null in FixedUpdate");
                 return;
@@ -178,7 +178,7 @@ namespace SuperMineBombersTogether
             catch (Exception ex)
             {
                 Console.WriteLine("WTF!!!!!!!!"); Console.WriteLine(ex.ToString());
-                return;
+                throw;
             }
             if (!client.IsConnected)
             {

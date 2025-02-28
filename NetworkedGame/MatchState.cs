@@ -15,42 +15,29 @@ namespace SuperMineBombersTogether
 {
     internal class MatchState
     {
+        public Player ownedPlayer; // you
         public List<Player> players;
         public List<AbstractBomb> bombs;
         public Playfield playfield;
 
         public MatchState()
         {
-            players = new List<Player>();
-            bombs = new List<AbstractBomb>();
-            playfield = new Playfield();
+            players = new();
+            bombs = new();
+            playfield = new();
         }
 
-        public void Update(bool isClient, float deltaTime, List<PlayerInputStateC2S> inputs)
+        public void Update(bool isHosting, float deltaTime, PlayerInputState inputs)
         {
             foreach (Player player in players)
             {
-                // Update with input matching id
-                bool found = false;
-                foreach (PlayerInputStateC2S input in inputs)
-                {
-                    if (player.id == input.clientId)
-                    {
-                        found = true;
-                        player.Update(deltaTime, input, playfield);
-                        if (input.attackPressed)
-                        {
-                            Console.WriteLine("BOMB!");
-                            Bomb newBomb = new(bombs.Count, player.pos, new Vector2(10, 0));
-                            SpawnBomb(newBomb);
-                        }
-                        break;
-                    }
-                }
-                if (!found)
-                {
-                    player.Update(deltaTime, new PlayerInputStateC2S(), playfield);
-                }
+                player.Update(deltaTime, inputs, playfield);
+            }
+            if (inputs.attackPressed)
+            {
+                Console.WriteLine("BOMB!");
+                Bomb newBomb = new(bombs.Count, ownedPlayer.pos, new Vector2(10, 0));
+                SpawnBomb(newBomb);
             }
             var bombsToCleanUp = new List<int>();
             for (int i = 0; i < bombs.Count; i++)
@@ -72,10 +59,15 @@ namespace SuperMineBombersTogether
             bombs.Add(b);
         }
 
-        public void AddPlayer(Player player)
+        public void AddPlayer(Player player, bool isHosting)
         {
             players.Add(player);
             player.pos = playfield.spawnPoints[players.Count - 1];
+            if (isHosting)
+            {
+                ownedPlayer = player;
+                ownedPlayer.isOwned = true;
+            }
         }
 
         public void RemovePlayer(Player player)

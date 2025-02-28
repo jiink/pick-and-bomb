@@ -9,14 +9,15 @@ namespace SuperMineBombersTogether
 {
     internal class Player : IMessageSerializable
     {
-        public static List<Color> colorList = new List<Color> { Color.Blue, Color.Red, Color.Green, Color.Yellow, Color.Purple, Color.Orange, Color.Brown, Color.Pink, Color.Gray, Color.Black };
+        public static List<Color> colorList = [Color.Blue, Color.Red, Color.Green, Color.Yellow, Color.Purple, Color.Orange, Color.Brown, Color.Pink, Color.Gray, Color.Black];
         public int id = 0;
-        public Vector2 pos = new Vector2(0, 0);
-        public Vector2 vel = new Vector2(0, 0);
+        public Vector2 pos = new(0, 0);
+        public Vector2 vel = new(0, 0);
         float defSpeed = 5; //How fast you walk by default
         public bool isDead = false;
         public int health = 100;
         int colorIndex = 0;
+        public bool isOwned = false; // if true, that means you are controlling this player. if false, it's another player connected to your game.
         Color Color => colorList[colorIndex];
 
         public Player() { }
@@ -33,8 +34,12 @@ namespace SuperMineBombersTogether
             pos = new Vector2(x, y);
         }
 
-        public void Update(float deltaTime, PlayerInputStateC2S input, Playfield pfield)
+        public void Update(float deltaTime, PlayerInputState input, Playfield pfield)
         {
+            if (!isOwned)
+            {
+                return;
+            }
             vel = input.direction * defSpeed;
             var desiredPos = pos + vel * deltaTime;
             var destination = new Vector2(desiredPos.X, desiredPos.Y);

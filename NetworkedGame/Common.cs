@@ -8,7 +8,7 @@ namespace SuperMineBombersTogether
 {
     internal class Common
     {
-        public const int tickRate = 20;
+        public const int tickRate = 20; // updates per second
         public enum MessageId
         {
             Heartbeat = 0,
@@ -25,5 +25,6 @@ namespace SuperMineBombersTogether
             BOMB,
             TINY_BOMB,
         }
+        static public bool isHosting = false;
     }
 }

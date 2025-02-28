@@ -9,19 +9,16 @@ using static SuperMineBombersTogether.Common;
 
 namespace SuperMineBombersTogether.PacketTypes
 {
-    internal class PlayerInputStateC2S : IMessageSerializable
+    internal class PlayerInputState
     {
-        public const MessageId Id = MessageId.PlayerInput;
-
-        public int clientId = 0;
-        public Vector2 direction = new Vector2(0, 0);
+        public Vector2 direction = new(0, 0);
         public bool attack = false;
         public bool attackPressed = false;
         public bool attackReleased = false;
 
-        public PlayerInputStateC2S() { }
+        internal PlayerInputState() { }
 
-        public PlayerInputStateC2S(Vector2 direction, bool attack, bool attackPressed, bool attackReleased)
+        internal PlayerInputState(Vector2 direction, bool attack, bool attackPressed, bool attackReleased)
         {
             this.direction = direction;
             this.attack = attack;
@@ -32,23 +29,6 @@ namespace SuperMineBombersTogether.PacketTypes
         public override string ToString()
         {
             return $"Dir: {direction}, Atk: {attack}, AtkP: {attackPressed}, AtkR: {attackReleased}";
-        }
-
-        public void Serialize(Message message)
-        {
-            message.AddFloat(direction.X);
-            message.AddFloat(direction.Y);
-            message.AddBool(attack);
-            message.AddBool(attackPressed);
-            message.AddBool(attackReleased);
-        }
-
-        public void Deserialize(Message message)
-        {
-            direction = new Vector2(message.GetFloat(), message.GetFloat());
-            attack = message.GetBool();
-            attackPressed = message.GetBool();
-            attackReleased = message.GetBool();
         }
     }
 }

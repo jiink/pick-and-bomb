@@ -40,12 +40,12 @@ namespace SuperMineBombersTogether
 
             if (choice == "host")   
             {
-                SMBT.Start(true);
+                SMBT.Start(hosting: true);
                 //ClientSide.Start();
             }
             else if (choice == "join")
             {
-                //ClientSide.Start();
+                SMBT.Start(hosting: false);
             }
         }
     }

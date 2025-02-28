@@ -30,6 +30,7 @@ namespace SuperMineBombersTogether
         static Camera2D camera = new();
         static PlayerInputState inputs = new();
         static Server? server;
+        static Client? client;
         private static double snapshotTimer;
 
         static public void Start(bool hosting)
@@ -42,10 +43,16 @@ namespace SuperMineBombersTogether
                 server.ClientConnected += OnClientConnect;
                 server.ClientDisconnected += OnClientDisconnect;
             }
+            else
+            {
+                client = new();
+                client.ConnectionFailed += OnConnectionFail;
+                client.Disconnected += OnDisconnect;
+                client.Connect("127.0.0.1:7777");
+            }
             matchState.playfield.Fill();
             matchState.AddPlayer(new Player(), true);
             InitCamera(ref camera);
-            
 
             while (!Window.ShouldClose())
             {
@@ -53,6 +60,10 @@ namespace SuperMineBombersTogether
                 if (Common.isHosting)
                 {
                     server!.Update();
+                }
+                else
+                {
+                    client!.Update();
                 }
                 // --------- inputs ------------------
                 if (!inputs.attackPressed && Input.IsKeyPressed(KeyboardKey.Space))
@@ -113,7 +124,6 @@ namespace SuperMineBombersTogether
             camera.Zoom = 10.0f;
         }
 
-
         private static void OnClientDisconnect(object? sender, ServerDisconnectedEventArgs e)
         {
             Console.WriteLine($"Client {e.Client.ToString} disconnected...");
@@ -124,7 +134,7 @@ namespace SuperMineBombersTogether
             if (sender == null) return;
             var server = (Server)sender;
             Console.WriteLine($"Client {e.Client.ToString} (id: {e.Client.Id}) connected!");
-            Player newP = new Player(0, 0, server.ClientCount, e.Client.Id);
+            Player newP = new(0, 0, server.ClientCount, e.Client.Id);
             matchState.AddPlayer(newP, false);
             matchState.playfield.MakeDirty();
         }

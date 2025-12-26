@@ -54,7 +54,7 @@ namespace pab::server {
         static int tickNum = 0;
         tickNum++;
         const float dt = 1 / (float)TICK_HZ;
-        LOG_INFO("Tick {} of {} ms", tickNum, (int)(dt * 1000));
+        //LOG_INFO("Tick {} of {} ms", tickNum, (int)(dt * 1000));
         updateGame(gGameState, gInputState, dt);
     }
 }

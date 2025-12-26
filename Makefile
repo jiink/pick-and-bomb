@@ -24,7 +24,7 @@
 .PHONY: all clean
 
 # Define required raylib variables
-PROJECT_NAME       ?= game
+PROJECT_NAME       ?= pick_and_bomb
 RAYLIB_VERSION     ?= 4.5.0
 RAYLIB_PATH        ?= ..\..
 
@@ -194,7 +194,7 @@ endif
 #  -std=gnu99           defines C language mode (GNU C from 1999 revision)
 #  -Wno-missing-braces  ignore invalid warning (GCC bug 53119)
 #  -D_DEFAULT_SOURCE    use with -std=c99 on Linux and PLATFORM_WEB, required for timespec
-CFLAGS += -Wall -std=c++14 -D_DEFAULT_SOURCE -Wno-missing-braces
+CFLAGS += -Wall -std=c++20 -D_DEFAULT_SOURCE -Wno-missing-braces
 
 ifeq ($(BUILD_MODE),DEBUG)
     CFLAGS += -g -O0
@@ -370,7 +370,8 @@ OBJ_DIR = obj
 # Define all object files from source files
 SRC = $(call rwildcard, *.c, *.h)
 #OBJS = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
-OBJS ?= main.cpp
+# By default include main plus project modules under server/ and client/ to avoid grabbing unrelated directories
+OBJS ?= main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp)
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)

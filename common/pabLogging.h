@@ -27,17 +27,17 @@ public:
     }
 
     template<typename... Args>
-    void info(const std::string& fmt, Args&&... args) {
+    void info(const std::format_string<Args...>& fmt, Args&&... args) {
         log(LogLevel::INFO, std::format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void warning(const std::string& fmt, Args&&... args) {
+    void warning(const std::format_string<Args...>& fmt, Args&&... args) {
         log(LogLevel::WARNING, std::format(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void error(const std::string& fmt, Args&&... args) {
+    void error(const std::format_string<Args...>& fmt, Args&&... args) {
         log(LogLevel::ERROR, std::format(fmt, std::forward<Args>(args)...));
     }
 

@@ -15,7 +15,7 @@ int main () {
 
     cout << "Hello World" << endl;
 
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "My first RAYLIB program!");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Pick and bomb");
     SetTargetFPS(60);
 
     while (WindowShouldClose() == false){

@@ -1,43 +1,74 @@
+// The game is called "Pick and Bomb".
+// "PAB" is short for "Pick and Bomb".
 #include <iostream>
 #include <raylib.h>
+#include "server/pabServer.h"
+#include "common/pabStructs.h"
+#include <chrono>
 
-using namespace std;
+static void runServer(int port);
+static void runClient(const std::string& ip, int port);
 
-int main () {
-
-    const int SCREEN_WIDTH = 800;
-    const int SCREEN_HEIGHT = 600;
-    int ball_x = 100;
-    int ball_y = 100;
-    int ball_speed_x = 5;
-    int ball_speed_y = 5;
-    int ball_radius = 15;
-
-    cout << "Hello World" << endl;
-
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Pick and bomb");
-    SetTargetFPS(60);
-
-    while (WindowShouldClose() == false){
-   
-        ball_x += ball_speed_x;
-        ball_y += ball_speed_y;
-
-        if(ball_x + ball_radius >= SCREEN_WIDTH || ball_x - ball_radius <= 0)
-        {
-            ball_speed_x *= -1;
-        }
-
-        if(ball_y + ball_radius >= SCREEN_HEIGHT || ball_y - ball_radius <= 0)
-        {
-            ball_speed_y *= -1;
-        }
-        
-        BeginDrawing();
-            ClearBackground(BLACK);
-            DrawCircle(ball_x,ball_y,ball_radius, WHITE);
-        EndDrawing();
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "look," << std::endl;
+        std::cerr << "To Host:   " << argv[0] << " -s <port>" << std::endl;
+        std::cerr << "To Join:   " << argv[0] << " -c <ip> <port>" << std::endl;
+        return 1;
     }
 
-    CloseWindow();
+    std::string mode = argv[1];
+
+    try {
+        if (mode == "-s") {
+            if (argc < 3) {
+                std::cerr << "Error: Server mode requires a port number." << std::endl;
+                return 1;
+            }
+            int port = std::stoi(argv[2]);
+            runServer(port);
+        } 
+        else if (mode == "-c") {
+            if (argc < 4) {
+                std::cerr << "Error: Client mode requires an IP address and a port." << std::endl;
+                return 1;
+            }
+            std::string ip = argv[2];
+            int port = std::stoi(argv[3]);
+            runClient(ip, port);
+        } 
+        else {
+            std::cerr << "Unknown flag: " << mode << std::endl;
+            return 1;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Invalid input: " << e.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+static const auto gStartTime = std::chrono::steady_clock::now();
+unsigned long millis() {
+    auto now = std::chrono::steady_clock::now();
+    auto duration = now - gStartTime;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+}
+
+static void runServer(int port) { 
+    std::cout << "Starting server on port: " << port << "..." << std::endl;
+    pab::server::init();
+    while (true) {
+        static int tickTimeStamp = 0;
+        const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
+        if (millis() - tickTimeStamp > tickPeriodMs) {
+            tickTimeStamp = millis();
+            pab::server::tick();
+        }
+    }
+}
+
+static void runClient(const std::string& ip, int port) { 
+    std::cout << "Connecting to server at " << ip << ":" << port << "..." << std::endl;
 }

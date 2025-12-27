@@ -15,7 +15,7 @@ struct GameState {
     std::vector<Player> players;
 };
 
-#define DEADZONE 0.4f
+const float DEADZONE = 0.4f;
 
 typedef enum {
     UP,
@@ -46,3 +46,12 @@ struct PlayerInputState {
 struct InputState {
     std::vector<PlayerInputState> playerInputs;
 };
+
+// ------- Networking -------------
+
+enum class Command {
+    snapshot,
+    bruh
+};
+
+const size_t HEADER_SIZE = 5;

@@ -5,6 +5,9 @@
 #define NOUSER              // Exclude User32 (fixes CloseWindow/ShowCursor collision)
 #include <enet/enet.h>
 #include "common/pabLogging.h"
+#include "common/pabStructs.h"
+#include "client/pabClient.h"
+#include "common/packetBuilder.h"
 
 static ENetHost* CreateClientHost() {
     ENetHost* host = enet_host_create(NULL, 1, 1, 0, 0);
@@ -14,15 +17,41 @@ static ENetHost* CreateClientHost() {
     return host;
 }
 
+static void ParsePacket(std::vector<uint8_t>& data) {
+    if (data.size() < 1) {
+        PAB_WARN("Empty packet");
+        return;
+    }
+    // Command cmd = (Command)data[0];
+    // uint32_t tick = data[1];
+    uint8_t cmdId;
+    uint32_t tick;
+    PacketReader pr(data);
+    pr >> cmdId >> tick;
+    // now remove the header so the next functions don't have to deal with it
+    data.erase(data.begin(), data.begin() + HEADER_SIZE);
+    switch ((Command)cmdId) {
+        case Command::snapshot:
+            pab::client::ApplySnapshot(data);
+            break;
+        default:
+            PAB_WARN("Unhandled command %d", cmdId);
+            break;
+    }
+}
+
 static void ProcessClientEvents(ENetHost* host, bool* running) {
     const uint32_t enetWaitTimeMs = 0;
     ENetEvent event;
     while (enet_host_service(host, &event, enetWaitTimeMs) > 0) {
         switch (event.type) {
-            case ENET_EVENT_TYPE_RECEIVE:
-                PAB_INFO("Got packet (len %d) from server", event.packet->dataLength);
+            case ENET_EVENT_TYPE_RECEIVE: {
+                //PAB_INFO("Got packet (len %d) from server", event.packet->dataLength);
+                std::vector<uint8_t> packetAsVec(event.packet->data, event.packet->data + event.packet->dataLength);
+                ParsePacket(packetAsVec);
                 enet_packet_destroy(event.packet);
                 break;
+            }
             case ENET_EVENT_TYPE_DISCONNECT:
                 PAB_INFO("Server disconnected", event.packet->dataLength);
                 *running = false;
@@ -73,12 +102,14 @@ void RunClient(const std::string& ip, int port) {
     const int SCR_H = 480;
     InitWindow(SCR_W, SCR_H, "Pick and Bomb");
     SetTargetFPS(60);
+    pab::client::Init();
     bool running = true;
     while (!WindowShouldClose() && running) {
         ProcessClientEvents(clientHost, &running);
         BeginDrawing();
-            ClearBackground(DARKGREEN);
-            DrawText(TextFormat("Hello %f", (float)GetTime()), 10, 10, 20, WHITE);
+            // ClearBackground(DARKGREEN);
+            // DrawText(TextFormat("Hello %f", (float)GetTime()), 10, 10, 20, WHITE);
+            pab::client::Draw();
         EndDrawing();
     }
     if (running) {

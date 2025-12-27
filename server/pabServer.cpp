@@ -2,10 +2,12 @@
 #include "common/pabStructs.h"
 #include "common/pabLogging.h"
 #include <vector>
+#include "common/packetBuilder.h"
 
 namespace {
     static GameState gGameState;
     static InputState gInputState;
+    static uint32_t tickNum = 0;
 
     static void UpdatePlayer(
         Player& player,
@@ -51,7 +53,6 @@ namespace pab::server {
     }
 
     void Tick(void) {
-        static int tickNum = 0;
         tickNum++;
         const float dt = 1 / (float)TICK_HZ;
         //PAB_INFO("Tick %d of %d ms", tickNum, (int)(dt * 1000));
@@ -89,5 +90,20 @@ namespace pab::server {
                 break; 
             }
         }
+    }
+
+    std::vector<uint8_t> MakeSnapshot() {
+        PacketBuilder pb;
+        pb.buffer.reserve(512);
+        pb << (uint8_t)Command::snapshot
+            << tickNum
+            << (uint8_t)gGameState.players.size();
+        for (size_t i = 0; i < gGameState.players.size(); i++) {
+            const Player& p = gGameState.players[i];
+            pb << (uint8_t)p.active
+                << p.pos.x
+                << p.pos.y;
+        }
+        return pb.buffer;
     }
 }

@@ -86,6 +86,16 @@ void RunServer(int port) {
         if (Millis() - tickTimeStamp > tickPeriodMs) {
             tickTimeStamp = Millis();
             pab::server::Tick();
+            // todo get a list of all packets the server wants to send?
+            auto snapshot = pab::server::MakeSnapshot();
+            if (!snapshot.empty()) {
+                ENetPacket* packet = enet_packet_create(
+                    snapshot.data(),
+                    snapshot.size(),
+                    0
+                );
+                enet_host_broadcast(serverHost, 0, packet);
+            }
         }
     }
     enet_host_destroy(serverHost);

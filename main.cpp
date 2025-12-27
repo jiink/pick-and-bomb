@@ -13,10 +13,6 @@
 #define ENET_IMPLEMENTATION
 #include <enet/enet.h>
 
-ENetHost* gServerHost = nullptr;
-ENetHost* gClientHost = nullptr;
-ENetHost* gServerPeer = nullptr; // for client to reference server
-
 static void runServer(int port);
 static void runClient(const std::string& ip, int port);
 
@@ -85,24 +81,26 @@ static void runServer(int port) {
         return;
     }
     atexit(enet_deinitialize);
-    ENetAddress address;
+    ENetAddress address = {0};
     address.host = ENET_HOST_ANY;
     address.port = port;
-    gServerHost = enet_host_create(&address, 32, 1, 0, 0);
-    if (gServerHost == NULL) {
+    ENetHost* serverHost = enet_host_create(&address, 32, 1, 0, 0);
+    if (serverHost == NULL) {
         PAB_ERR("failed to create ENet server host");
+        return;
     }
     std::cout << "Starting server on port: " << port << "..." << std::endl;
     pab::server::init();
     ENetEvent event;
     while (true) {
-        while (enet_host_service(gServerHost, &event, 0) > 0) {
+        const uint32_t enetWaitTimeMs = 20;
+        while (enet_host_service(serverHost, &event, enetWaitTimeMs) > 0) {
             switch (event.type) {
                 case ENET_EVENT_TYPE_CONNECT:
                     PAB_INFO("New client connected from %s", format_ip(&event.peer->address.host));
                     break;
                 case ENET_EVENT_TYPE_RECEIVE:
-                    PAB_INFO("Got packet (len %d)", event.packet->dataLength);
+                    PAB_INFO("Got packet (len %d) from client", event.packet->dataLength);
                     enet_packet_destroy(event.packet);
                     break;
                 case ENET_EVENT_TYPE_DISCONNECT:
@@ -122,9 +120,58 @@ static void runServer(int port) {
             pab::server::tick();
         }
     }
-    enet_host_destroy(gServerHost);
+    enet_host_destroy(serverHost);
 }
 
 static void runClient(const std::string& ip, int port) { 
-    std::cout << "Connecting to server at " << ip << ":" << port << "..." << std::endl;
+    if (enet_initialize () != 0) {
+        std::cout << "An error occurred while initializing ENet." << std::endl;
+        return;
+    }
+    atexit(enet_deinitialize);
+    ENetHost* clientHost = enet_host_create(NULL, 1, 1, 0, 0);
+    if (clientHost == NULL) {
+        PAB_ERR("failed to create ENet client host");
+        return;
+    }
+    ENetAddress address = {0};
+    enet_address_set_host(&address, ip.c_str());
+    address.port = port;
+    const uint32_t connectionWaitTimeMs = 5000;
+    std::cout << "Connecting to server at " << ip << ":" << port << " with " << connectionWaitTimeMs << " ms timeout..." << std::endl;
+    ENetPeer* serverPeer = enet_host_connect(clientHost, &address, 1, 0);
+    if (serverPeer == NULL) {
+        PAB_ERR("No peer here");
+        return;
+    }
+    ENetEvent event;
+    if (enet_host_service(clientHost, &event, connectionWaitTimeMs) > 0 &&
+        event.type == ENET_EVENT_TYPE_CONNECT)
+    {
+        PAB_INFO("Connected");
+    }
+    bool running = true;
+    while (running) {
+        const uint32_t enetWaitTimeMs = 20;
+        while (enet_host_service(clientHost, &event, enetWaitTimeMs) > 0) {
+            switch (event.type) {
+                case ENET_EVENT_TYPE_RECEIVE:
+                    PAB_INFO("Got packet (len %d) from server", event.packet->dataLength);
+                    enet_packet_destroy(event.packet);
+                    break;
+                case ENET_EVENT_TYPE_DISCONNECT:
+                    PAB_INFO("Server disconnected", event.packet->dataLength);
+                    running = false;
+                    break;
+                case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT:
+                    PAB_INFO("Server disconnected timeout");
+                    break;
+                case ENET_EVENT_TYPE_NONE:
+                    break;
+                default:
+                    PAB_WARN("(Client) Unhandled ENet event %d", event.type);
+                    break;
+            }
+        }
+    }
 }

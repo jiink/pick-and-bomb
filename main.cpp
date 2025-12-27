@@ -4,7 +4,18 @@
 #include <raylib.h>
 #include "server/pabServer.h"
 #include "common/pabStructs.h"
+#include "common/pabLogging.h"
 #include <chrono>
+
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
+#define NOGDI               // Exclude GDI (fixes Rectangle collision)
+#define NOUSER              // Exclude User32 (fixes CloseWindow/ShowCursor collision)
+#define ENET_IMPLEMENTATION
+#include <enet/enet.h>
+
+ENetHost* gServerHost = nullptr;
+ENetHost* gClientHost = nullptr;
+ENetHost* gServerPeer = nullptr; // for client to reference server
 
 static void runServer(int port);
 static void runClient(const std::string& ip, int port);
@@ -56,10 +67,54 @@ unsigned long millis() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 }
 
+// const char* format_ip(enet_uint32 host) {
+//     static thread_local char buffer[16];
+//     sprintf(buffer, "%u.%u.%u.%u", host & 0xFF, (host >> 8) & 0xFF, (host >> 16) & 0xFF, (host >> 24) & 0xFF);
+//     return buffer;
+// }
+
+const char* format_ip(const struct in6_addr* addr) {
+    static thread_local char str[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, addr, str, sizeof(str));
+    return str;
+}
+
 static void runServer(int port) { 
+    if (enet_initialize () != 0) {
+        std::cout << "An error occurred while initializing ENet." << std::endl;
+        return;
+    }
+    atexit(enet_deinitialize);
+    ENetAddress address;
+    address.host = ENET_HOST_ANY;
+    address.port = port;
+    gServerHost = enet_host_create(&address, 32, 1, 0, 0);
+    if (gServerHost == NULL) {
+        PAB_ERR("failed to create ENet server host");
+    }
     std::cout << "Starting server on port: " << port << "..." << std::endl;
     pab::server::init();
+    ENetEvent event;
     while (true) {
+        while (enet_host_service(gServerHost, &event, 0) > 0) {
+            switch (event.type) {
+                case ENET_EVENT_TYPE_CONNECT:
+                    PAB_INFO("New client connected from %s", format_ip(&event.peer->address.host));
+                    break;
+                case ENET_EVENT_TYPE_RECEIVE:
+                    PAB_INFO("Got packet (len %d)", event.packet->dataLength);
+                    enet_packet_destroy(event.packet);
+                    break;
+                case ENET_EVENT_TYPE_DISCONNECT:
+                    PAB_INFO("Client disconnected");
+                    break;
+                case ENET_EVENT_TYPE_NONE:
+                    break;
+                case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT:
+                    PAB_INFO("Client disconnected timeout");
+                    break;
+            }
+        }
         static int tickTimeStamp = 0;
         const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
         if (millis() - tickTimeStamp > tickPeriodMs) {
@@ -67,6 +122,7 @@ static void runServer(int port) {
             pab::server::tick();
         }
     }
+    enet_host_destroy(gServerHost);
 }
 
 static void runClient(const std::string& ip, int port) { 

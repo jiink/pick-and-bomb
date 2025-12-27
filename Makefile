@@ -309,7 +309,7 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),WINDOWS)
         # Libraries for Windows desktop compilation
         # NOTE: WinMM library required to set high-res timer resolution
-        LDLIBS = -lraylib -lopengl32 -lgdi32 -lwinmm
+        LDLIBS = -lraylib -lopengl32 -lgdi32 -lwinmm -lws2_32
         # Required for physac examples
         #LDLIBS += -static -lpthread
     endif
@@ -371,7 +371,7 @@ OBJ_DIR = obj
 SRC = $(call rwildcard, *.c, *.h)
 #OBJS = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 # By default include main plus project modules under server/ and client/ to avoid grabbing unrelated directories
-OBJS ?= main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp)
+OBJS ?= main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp) $(wildcard common/*.cpp)
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)

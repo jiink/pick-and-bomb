@@ -1,4 +1,8 @@
 #include "clientHost.h"
+#include <raylib.h>
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
+#define NOGDI               // Exclude GDI (fixes Rectangle collision)
+#define NOUSER              // Exclude User32 (fixes CloseWindow/ShowCursor collision)
 #include <enet/enet.h>
 #include "common/pabLogging.h"
 
@@ -65,9 +69,21 @@ void RunClient(const std::string& ip, int port) {
         enet_host_destroy(clientHost);
         return;
     }
+    const int SCR_W = 640;
+    const int SCR_H = 480;
+    InitWindow(SCR_W, SCR_H, "Pick and Bomb");
+    SetTargetFPS(60);
     bool running = true;
-    while (running) {
+    while (!WindowShouldClose() && running) {
         ProcessClientEvents(clientHost, &running);
+        BeginDrawing();
+            ClearBackground(DARKGREEN);
+            DrawText(TextFormat("Hello %f", (float)GetTime()), 10, 10, 20, WHITE);
+        EndDrawing();
+    }
+    if (running) {
+        enet_peer_disconnect(serverPeer, 0);
+        enet_host_flush(clientHost);
     }
     enet_host_destroy(clientHost);
 }

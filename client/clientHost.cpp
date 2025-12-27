@@ -15,7 +15,7 @@ static ENetHost* CreateClientHost() {
 }
 
 static void ProcessClientEvents(ENetHost* host, bool* running) {
-    const uint32_t enetWaitTimeMs = 20;
+    const uint32_t enetWaitTimeMs = 0;
     ENetEvent event;
     while (enet_host_service(host, &event, enetWaitTimeMs) > 0) {
         switch (event.type) {

@@ -1,0 +1,73 @@
+#include "serverHost.h"
+#include <enet/enet.h>
+#include "common/pabLogging.h"
+#include "pabServer.h"
+#include "common/pabStructs.h"
+#include <chrono>
+
+const char* FormatIp(const struct in6_addr* addr) {
+    static thread_local char str[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, addr, str, sizeof(str));
+    return str;
+}
+
+static ENetHost* CreateServerHost(int port) {
+    ENetAddress address = {0};
+    address.host = ENET_HOST_ANY;
+    address.port = port;
+    ENetHost* host = enet_host_create(&address, 32, 1, 0, 0);
+    if (host == NULL) {
+        PAB_ERR("failed to create ENet server host");
+    }
+    return host;
+}
+
+static void ProcessServerEvents(ENetHost* serverHost, uint32_t waitMs) {
+    ENetEvent event;
+    while (enet_host_service(serverHost, &event, waitMs) > 0) {
+        switch (event.type) {
+            case ENET_EVENT_TYPE_CONNECT:
+                PAB_INFO("New client connected from %s", FormatIp(&event.peer->address.host));
+                break;
+            case ENET_EVENT_TYPE_RECEIVE:
+                PAB_INFO("Got packet (len %d) from client", event.packet->dataLength);
+                enet_packet_destroy(event.packet);
+                break;
+            case ENET_EVENT_TYPE_DISCONNECT:
+                PAB_INFO("Client disconnected");
+                break;
+            case ENET_EVENT_TYPE_NONE:
+                break;
+            case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT:
+                PAB_INFO("Client disconnected timeout");
+                break;
+        }
+    }
+}
+
+static const auto gStartTime = std::chrono::steady_clock::now();
+unsigned long Millis() {
+    auto now = std::chrono::steady_clock::now();
+    auto duration = now - gStartTime;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+}
+
+void RunServer(int port) { 
+    ENetHost* serverHost = CreateServerHost(port);
+    if (serverHost == NULL) { return; }
+    PAB_INFO("Starting server on port: %d...", port);
+    pab::server::init();
+    static int tickTimeStamp = 0;
+    const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
+    while (true) {
+        uint32_t timeSinceLastTick = Millis() - tickTimeStamp;
+        uint32_t enetWaitTimeMs = tickPeriodMs - timeSinceLastTick;
+        if (enetWaitTimeMs < 0) { enetWaitTimeMs = 0; }
+        ProcessServerEvents(serverHost, enetWaitTimeMs);
+        if (Millis() - tickTimeStamp > tickPeriodMs) {
+            tickTimeStamp = Millis();
+            pab::server::tick();
+        }
+    }
+    enet_host_destroy(serverHost);
+}

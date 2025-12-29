@@ -16,7 +16,10 @@
                 "args": [
                     "RAYLIB_PATH=C:/raylib/raylib",
                     "BUILD_MODE=DEBUG"
-                ]
+                ],
+                "presentation": {
+                    "clear": true
+                }
             },
             "osx": {
                 "args": [
@@ -25,7 +28,6 @@
             },
             "linux": {
                 "args": [
-                    ,
                     "DESTDIR=/home/linuxbrew/.linuxbrew",
                     "RAYLIB_LIBTYPE=SHARED",
                     "EXAMPLE_RUNTIME_PATH=/home/linuxbrew/.linuxbrew/lib",

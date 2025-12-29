@@ -7,7 +7,7 @@
 namespace {
     static GameState gGameState;
     static InputState gInputState;
-    static uint32_t tickNum = 0;
+    static uint32_t gTickNum = 0;
 
     static void UpdatePlayer(
         Player& player,
@@ -15,7 +15,7 @@ namespace {
         const PlayerInputState& pInput,
         const float dt)
     {
-        const float speed = 1.0f;
+        const float speed = 2.0f;
         player.pos = Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
     }
 
@@ -45,6 +45,16 @@ namespace {
             UpdatePlayer(p, state, pInput, dt);
         }
     } 
+
+    void ApplyPlayerInputs(const PlayerInputState& pInputs, uint8_t playerNum) {
+        if (playerNum >= gInputState.playerInputs.size()) {
+            PAB_ERR("Can't apply player inputs for index %d when "
+                "there are only %d players", 
+                playerNum, gInputState.playerInputs.size());
+            return;
+        }
+        gInputState.playerInputs[playerNum] = pInputs;
+    }
 }
 
 namespace pab::server {
@@ -53,9 +63,9 @@ namespace pab::server {
     }
 
     void Tick(void) {
-        tickNum++;
+        gTickNum++;
         const float dt = 1 / (float)TICK_HZ;
-        //PAB_INFO("Tick %d of %d ms", tickNum, (int)(dt * 1000));
+        //PAB_INFO("Tick %d of %d ms (%.1f s)", gTickNum, (int)(dt * 1000), (gTickNum * dt));
         UpdateGame(gGameState, gInputState, dt);
     }
 
@@ -95,8 +105,8 @@ namespace pab::server {
     std::vector<uint8_t> MakeSnapshot() {
         PacketBuilder pb;
         pb.buffer.reserve(512);
-        pb << (uint8_t)Command::snapshot
-            << tickNum
+        pb << (uint8_t)Command::SNAPSHOT
+            << gTickNum
             << (uint8_t)gGameState.players.size();
         for (size_t i = 0; i < gGameState.players.size(); i++) {
             const Player& p = gGameState.players[i];
@@ -105,5 +115,13 @@ namespace pab::server {
                 << p.pos.y;
         }
         return pb.buffer;
+    }
+
+    void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerNum)
+    {
+        PlayerInputState pInputs = {};
+        PacketReader pr(data);
+        pr >> pInputs;
+        ApplyPlayerInputs(pInputs, playerNum);
     }
 }

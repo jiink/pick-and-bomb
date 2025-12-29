@@ -8,6 +8,7 @@
 #include "common/pabStructs.h"
 #include "client/pabClient.h"
 #include "common/packetBuilder.h"
+#include <chrono>
 
 static ENetHost* CreateClientHost() {
     ENetHost* host = enet_host_create(NULL, 1, 1, 0, 0);
@@ -22,8 +23,6 @@ static void ParsePacket(std::vector<uint8_t>& data) {
         PAB_WARN("Empty packet");
         return;
     }
-    // Command cmd = (Command)data[0];
-    // uint32_t tick = data[1];
     uint8_t cmdId;
     uint32_t tick;
     PacketReader pr(data);
@@ -31,7 +30,7 @@ static void ParsePacket(std::vector<uint8_t>& data) {
     // now remove the header so the next functions don't have to deal with it
     data.erase(data.begin(), data.begin() + HEADER_SIZE);
     switch ((Command)cmdId) {
-        case Command::snapshot:
+        case Command::SNAPSHOT:
             pab::client::ApplySnapshot(data);
             break;
         default:
@@ -40,7 +39,7 @@ static void ParsePacket(std::vector<uint8_t>& data) {
     }
 }
 
-static void ProcessClientEvents(ENetHost* host, bool* running) {
+static void ProcessEventsFromClient(ENetHost* host, bool* running) {
     const uint32_t enetWaitTimeMs = 0;
     ENetEvent event;
     while (enet_host_service(host, &event, enetWaitTimeMs) > 0) {
@@ -90,6 +89,14 @@ static ENetPeer* ConnectToServer(ENetHost* clientHost, const std::string& ip, in
     return NULL;
 }
 
+static const auto gStartTime = std::chrono::steady_clock::now();
+static unsigned long Millis() {
+    auto now = std::chrono::steady_clock::now();
+    auto duration = now - gStartTime;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+}
+
+
 void RunClient(const std::string& ip, int port) { 
     ENetHost* clientHost = CreateClientHost();
     if (clientHost == NULL) { return; }
@@ -105,7 +112,24 @@ void RunClient(const std::string& ip, int port) {
     pab::client::Init();
     bool running = true;
     while (!WindowShouldClose() && running) {
-        ProcessClientEvents(clientHost, &running);
+        static int tickTimeStamp = 0;
+        const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
+        ProcessEventsFromClient(clientHost, &running);
+        uint32_t timeSinceLastTick = Millis() - tickTimeStamp;
+        uint32_t enetWaitTimeMs = tickPeriodMs - timeSinceLastTick;
+        if (enetWaitTimeMs < 0) { enetWaitTimeMs = 0; }
+        if (Millis() - tickTimeStamp > tickPeriodMs) {
+            tickTimeStamp = Millis();
+            pab::client::Tick();
+            while (auto packetDataOpt = pab::client::ConsumePacketToSend()) {
+                ENetPacket* packet = enet_packet_create(
+                    (*packetDataOpt).data(),
+                    (*packetDataOpt).size(),
+                    0
+                );
+                enet_peer_send(serverPeer, 0, packet);
+            }
+        }
         BeginDrawing();
             // ClearBackground(DARKGREEN);
             // DrawText(TextFormat("Hello %f", (float)GetTime()), 10, 10, 20, WHITE);

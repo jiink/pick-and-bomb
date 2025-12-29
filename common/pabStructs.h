@@ -1,5 +1,11 @@
 #pragma once
-#include <raymath.h>
+// NOTE: If you're using this header in a file that needs <raylib.h>, include
+// <raylib.h> before you include this file. That's because <raymath.h> will
+// define Vector2 and other types if they have not already been defined by <raylib.h>.
+// This is done by checking macros that <raylib.h> sets, e.g. `RL_VECTOR2_TYPE`.
+// So if you are getting multiple definitions of Vector2 or other math stuff,
+// just move up your `#include <raylib.h>` line.
+#include <raymath.h> 
 #include <vector>
 #include <cstdint>
 
@@ -15,32 +21,15 @@ struct GameState {
     std::vector<Player> players;
 };
 
-const float DEADZONE = 0.4f;
-
-typedef enum {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT,
-    ATTACK,
-    WEP_SELECT,
-    NUM_ACTIONS
-} BindingAction;
-
-struct KeyBind {
-    BindingAction action;
-    int key;
-};
-
 struct PlayerInputState {
-    uint8_t playerIdx;
-    Vector2 direction;
-    bool attack;
-    bool attackPressed;
-    bool attackReleased;
-    bool wepSelectPressed;
-    bool leftPressed;
-    bool rightPressed;
+    uint8_t playerIdx = 0;
+    Vector2 direction = Vector2 {0, 0};
+    bool attack = false;
+    bool attackPressed = false;
+    bool attackReleased = false;
+    bool wepSelectPressed = false;
+    bool leftPressed = false;
+    bool rightPressed = false;
 };
 
 struct InputState {
@@ -50,8 +39,8 @@ struct InputState {
 // ------- Networking -------------
 
 enum class Command {
-    snapshot,
-    bruh
+    SNAPSHOT,
+    INPUTS
 };
 
 const size_t HEADER_SIZE = 5;

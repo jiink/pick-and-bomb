@@ -38,7 +38,7 @@ struct PacketReader {
 
         if (offset + sizeof(T) > buffer.size()) {
             //throw std::runtime_error("Buffer underflow: Packet too short!");
-            PAB_ERR("PacketReader buffer underflow: Packet too short!")
+            PAB_ERR("PacketReader buffer underflow: Packet too short!");
             return *this;
         }
         std::memcpy(&value, &buffer[offset], sizeof(T));

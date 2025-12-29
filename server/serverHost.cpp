@@ -6,6 +6,7 @@
 #include "server/pabServer.h"
 #include <chrono>
 #include <map>
+#include "common/packetBuilder.h"
 
 std::map<ENetPeer*, uint8_t> gPeerToPlayerNum;
 
@@ -37,7 +38,28 @@ static void CleanUpDisconnectedClient(ENetPeer* peer) {
     PAB_INFO("Cleaned up player #%d", playerNum);
 }
 
-static void ProcessServerEvents(ENetHost* serverHost, uint32_t waitMs) {
+static void ParsePacket(std::vector<uint8_t>& data, uint8_t playerNum) {
+    if (data.size() < 1) {
+        PAB_WARN("Empty packet");
+        return;
+    }
+    uint8_t cmdId;
+    uint32_t tick;
+    PacketReader pr(data);
+    pr >> cmdId >> tick;
+    // now remove the header so the next functions don't have to deal with it
+    data.erase(data.begin(), data.begin() + HEADER_SIZE);
+    switch ((Command)cmdId) {
+        case Command::INPUTS:
+            pab::server::ApplyPlayerInputsFromPacket(data, playerNum);
+            break;
+        default:
+            PAB_WARN("Unhandled command %d", cmdId);
+            break;
+    }
+}
+
+static void ProcessEventsFromServer(ENetHost* serverHost, uint32_t waitMs) {
     ENetEvent event;
     while (enet_host_service(serverHost, &event, waitMs) > 0) {
         switch (event.type) {
@@ -46,10 +68,19 @@ static void ProcessServerEvents(ENetHost* serverHost, uint32_t waitMs) {
                 gPeerToPlayerNum[event.peer] = pab::server::MakeNewPlayer();
                 PAB_INFO("Made new player, num %d", gPeerToPlayerNum[event.peer]);
                 break;
-            case ENET_EVENT_TYPE_RECEIVE:
-                PAB_INFO("Got packet (len %d) from client", event.packet->dataLength);
+            case ENET_EVENT_TYPE_RECEIVE: {
+                //PAB_INFO("Got packet (len %d) from client", event.packet->dataLength);
+                std::vector<uint8_t> packetAsVec(event.packet->data, event.packet->data + event.packet->dataLength);
+                if (gPeerToPlayerNum.find(event.peer) == gPeerToPlayerNum.end()) {
+                    PAB_ERR("Received packet from unregistered client, disregarding.");
+                    enet_packet_destroy(event.packet);
+                    return;
+                }
+                uint8_t playerNum = gPeerToPlayerNum[event.peer];
+                ParsePacket(packetAsVec, playerNum);
                 enet_packet_destroy(event.packet);
                 break;
+            }
             case ENET_EVENT_TYPE_DISCONNECT:
                 PAB_INFO("Client disconnected");
                 CleanUpDisconnectedClient(event.peer);
@@ -65,7 +96,7 @@ static void ProcessServerEvents(ENetHost* serverHost, uint32_t waitMs) {
 }
 
 static const auto gStartTime = std::chrono::steady_clock::now();
-unsigned long Millis() {
+static unsigned long Millis() {
     auto now = std::chrono::steady_clock::now();
     auto duration = now - gStartTime;
     return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
@@ -76,13 +107,13 @@ void RunServer(int port) {
     if (serverHost == NULL) { return; }
     PAB_INFO("Starting server on port: %d...", port);
     pab::server::Init();
-    static int tickTimeStamp = 0;
-    const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
     while (true) {
+        static int tickTimeStamp = 0;
+        const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
         uint32_t timeSinceLastTick = Millis() - tickTimeStamp;
         uint32_t enetWaitTimeMs = tickPeriodMs - timeSinceLastTick;
         if (enetWaitTimeMs < 0) { enetWaitTimeMs = 0; }
-        ProcessServerEvents(serverHost, enetWaitTimeMs);
+        ProcessEventsFromServer(serverHost, enetWaitTimeMs);
         if (Millis() - tickTimeStamp > tickPeriodMs) {
             tickTimeStamp = Millis();
             pab::server::Tick();

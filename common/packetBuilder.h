@@ -7,6 +7,11 @@
 struct PacketBuilder {
     std::vector<uint8_t> buffer;
 
+    PacketBuilder& operator<<(bool value) {
+        uint8_t byteVal = value ? 1 : 0;
+        return *this << byteVal; // Recursively calls the generic template with uint8_t
+    }
+
     // Generic write for any simple type (int, float, structs, enums)
     template <typename T>
     PacketBuilder& operator<<(const T& value) {
@@ -31,14 +36,21 @@ struct PacketReader {
 
     PacketReader(const std::vector<uint8_t>& buf) : buffer(buf) {}
 
+    PacketReader& operator>>(bool& value) {
+        uint8_t byteVal;
+        *this >> byteVal; // Recursively calls generic template
+        value = (byteVal > 0);
+        return *this;
+    }
+
     // Generic read for simple types (int, float, etc)
     template <typename T>
     PacketReader& operator>>(T& value) {
         static_assert(std::is_trivially_copyable<T>::value, "Type must be POD");
 
         if (offset + sizeof(T) > buffer.size()) {
-            //throw std::runtime_error("Buffer underflow: Packet too short!");
             PAB_ERR("PacketReader buffer underflow: Packet too short!");
+            std::memset(&value, 0, sizeof(T)); 
             return *this;
         }
         std::memcpy(&value, &buffer[offset], sizeof(T));

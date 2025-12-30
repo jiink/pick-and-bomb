@@ -7,8 +7,11 @@
 #include <vector>
 #include <deque>
 #include <optional>
+#include <algorithm>
+
 namespace {
     GameState gGameState;
+    std::deque<Snapshot> gSnapshotBuffer;
     PlayerBindings gInputBindings;
     PlayerInputState gInputs;
     Camera2D camera = Camera2D {
@@ -22,6 +25,16 @@ namespace {
     uint8_t gMyPlayerId = 0;
     const size_t MAX_PACKET_SIZE = 1000;
     const size_t MAX_PACKET_COUNT = 100;
+    const float INTERPOLATION_OFFSET_S = 0.1f;
+    float gClientTimeS = 0.0f;
+    bool gFirstSnapshotReceived = false;
+
+    const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
+        for (const auto& p : snap.players) {
+            if (p.id == id) { return &p; }
+        }
+        return nullptr;
+    }
 
     Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
         auto it = players.find(id);
@@ -64,7 +77,9 @@ namespace {
         pb.buffer.reserve(sizeof(PlayerInputState));
         pb << (uint8_t)Command::INPUTS
             << gTickNum
-            << inputs;
+            << inputs.playerId << inputs.direction.x << inputs.direction.y
+            << inputs.attack << inputs.attackPressed << inputs.attackReleased
+            << inputs.wepSelectPressed << inputs.leftPressed << inputs.rightPressed;
         NetAddPacket(pb.buffer);
     }
 }
@@ -89,7 +104,44 @@ namespace pab::client {
         NetSendInputs(gInputs);
     }
 
+    void UpdateInterpolation(float dt) {
+        if (gSnapshotBuffer.size() < 2) { return; }
+        gClientTimeS += dt;
+        // let it be so:
+        // gSnapshotBuffer[0] is the previous tick
+        // gSnapshotBuffer[1] is the next tick (i.e. the new/current tick to interpolate towards)
+        while (gSnapshotBuffer.size() > 2 && 
+            gSnapshotBuffer[1].tick * (1.0f / TICK_HZ) < gClientTimeS)
+        {
+                gSnapshotBuffer.pop_front();
+        }
+        const Snapshot& prev = gSnapshotBuffer[0];
+        const Snapshot& next = gSnapshotBuffer[1];
+        float prevTimeS = prev.tick * (1.0f / TICK_HZ);
+        float nextTimeS = next.tick * (1.0f / TICK_HZ);
+        float duration = nextTimeS - prevTimeS;
+        float alpha = 0.0f;
+        if (duration > 0.0001f) {
+            alpha = (gClientTimeS - prevTimeS) / duration;
+        }
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
+        gGameState.players.clear();
+        for (const SnapshotPlayer& nextP : next.players) {
+            const SnapshotPlayer* prevP = FindPlayerInSnapshot(prev, nextP.id);
+            Player visualP;
+            visualP.id = nextP.id;
+            visualP.dead = nextP.dead;
+            if (prevP) {
+                visualP.pos = Vector2Lerp(prevP->pos, nextP.pos, alpha);
+            } else {
+                visualP.pos = nextP.pos;
+            }
+            gGameState.players[visualP.id] = visualP;
+        }
+    }
+
     void Draw() {
+        UpdateInterpolation(GetFrameTime());
         BeginMode2D(camera);
             ClearBackground(GRAY);
             DrawGameState(gGameState);
@@ -100,26 +152,25 @@ namespace pab::client {
         // }
     }
 
-    void ApplySnapshot(std::vector<uint8_t> data) {
-        gGameState.players.clear();
+    void ApplySnapshot(uint32_t serverTick, std::vector<uint8_t> data) {
         PacketReader pr(data);
         uint8_t numPlayers;
         pr >> numPlayers;
-        for (size_t pI = 0; pI < numPlayers; pI++) {
-            uint8_t pId;
-            uint8_t pActiveB;
-            float pX;
-            float pY;
-            pr >> pId >> pActiveB >> pX >> pY;
-            Player p = Player {
-                .id = pId,
-                .active = pActiveB > 0,
-                .pos = Vector2 {
-                    .x = pX,
-                    .y = pY
-                }
-            };
-            gGameState.players[pId] = p;
+        Snapshot newSnap;
+        newSnap.tick = serverTick;
+        newSnap.players.reserve(numPlayers);
+        for (size_t i = 0; i < numPlayers; i++) {
+            SnapshotPlayer sp;
+            pr >> sp.id >> sp.dead >> sp.pos.x >> sp.pos.y;
+            newSnap.players.push_back(sp);
+        }
+        gSnapshotBuffer.push_back(newSnap);
+        // sort buffer and init logic
+        std::sort(gSnapshotBuffer.begin(), gSnapshotBuffer.end(), 
+            [](const Snapshot& a, const Snapshot& b) { return a.tick < b.tick; });
+        if (!gFirstSnapshotReceived) {
+            gFirstSnapshotReceived = true;
+            gClientTimeS = (newSnap.tick * (1.0f / TICK_HZ) - INTERPOLATION_OFFSET_S);
         }
     }
 

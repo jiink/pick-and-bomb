@@ -126,7 +126,9 @@ namespace pab::server {
         //PAB_INFO("Got inputs from player id %d", playerId);
         PlayerInputState pInputs = {};
         PacketReader pr(data);
-        pr >> pInputs;
+        pr >> pInputs.playerId >> pInputs.direction.x >> pInputs.direction.y
+            >> pInputs.attack >> pInputs.attackPressed >> pInputs.attackReleased
+            >> pInputs.wepSelectPressed >> pInputs.leftPressed >> pInputs.rightPressed;
         pInputs.playerId = playerId;
         ApplyPlayerInputs(pInputs);
     }

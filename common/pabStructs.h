@@ -26,6 +26,7 @@ struct GameState {
 struct PlayerInputState {
     uint8_t playerId = 0;
     Vector2 direction = Vector2 {0, 0};
+    // todo: make this a bitfield or something
     bool attack = false;
     bool attackPressed = false;
     bool attackReleased = false;
@@ -56,5 +57,6 @@ struct SnapshotPlayer {
 };
 
 struct Snapshot {
+    uint32_t tick = 0;
     std::vector<SnapshotPlayer> players;
 };

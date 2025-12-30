@@ -8,7 +8,7 @@ namespace pab::client {
     void Init();
     void Tick();
     void Draw();
-    void ApplySnapshot(std::vector<uint8_t> data);
+    void ApplySnapshot(uint32_t tick, std::vector<uint8_t> data);
     std::optional<std::vector<uint8_t>> ConsumePacketToSend();
     void SetPlayerId(uint8_t id);
 }

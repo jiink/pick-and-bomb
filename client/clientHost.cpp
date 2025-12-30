@@ -32,7 +32,7 @@ static void ParsePacket(std::vector<uint8_t>& data) {
     switch ((Command)cmdId) {
         case Command::SNAPSHOT:
             //PAB_INFO("> Got a snapshot (#%d, %d B)", tick, data.size());
-            pab::client::ApplySnapshot(data);
+            pab::client::ApplySnapshot(tick, data);
             break;
         case Command::WELCOME: {
             PacketReader pr2(data);

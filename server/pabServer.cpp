@@ -5,11 +5,20 @@
 #include "common/packetBuilder.h"
 
 namespace {
-    static GameState gGameState;
-    static InputState gInputState;
-    static uint32_t gTickNum = 0;
+    GameState gGameState;
+    InputState gInputState;
+    uint32_t gTickNum = 0;
+    uint8_t gNextPlayerId = 0;
 
-    static void UpdatePlayer(
+    Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
+        auto it = players.find(id);
+        if (it != players.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
+
+    void UpdatePlayer(
         Player& player,
         GameState& state,
         const PlayerInputState& pInput,
@@ -19,41 +28,41 @@ namespace {
         player.pos = Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
     }
 
-    static PlayerInputState FindPlayerInputs(const InputState& inputs, int playerNum) {
+    PlayerInputState GetPlayerInputs(const InputState& inputs, int playerId) {
         for (PlayerInputState pInput : inputs.playerInputs) {
-            if (pInput.playerIdx == playerNum) {
+            if (pInput.playerId == playerId) {
                 return pInput;
             }
         }
-        PAB_ERR("Couldn't find inputs for p%d", playerNum);
+        PAB_ERR("Couldn't find inputs for player id %d", playerId);
         PlayerInputState defaultInputs = {0};
         return defaultInputs;
     }
 
-    static void UpdateGame(
+    void UpdateGame(
         GameState& state, 
         InputState& inputs, 
         const float dt)
     {
-        for (int pNum = 0; pNum < (int)state.players.size(); pNum++)
-        {
-            Player& p = state.players[pNum];
-            if (!p.active) {
+        for (auto& [id, p] : state.players) {
+            if (p.dead) {
                 continue;
             }
-            PlayerInputState pInput = FindPlayerInputs(inputs, pNum);
+            PlayerInputState pInput = GetPlayerInputs(inputs, id);
             UpdatePlayer(p, state, pInput, dt);
         }
     } 
 
-    void ApplyPlayerInputs(const PlayerInputState& pInputs, uint8_t playerNum) {
-        if (playerNum >= gInputState.playerInputs.size()) {
-            PAB_ERR("Can't apply player inputs for index %d when "
-                "there are only %d players", 
-                playerNum, gInputState.playerInputs.size());
-            return;
+    void ApplyPlayerInputs(const PlayerInputState& pInputs) {
+        for (PlayerInputState& ogPInput : gInputState.playerInputs) {
+            //PAB_INFO(">> ogPInput.playerId == playerId -> %d == %d", ogPInput.playerId, pInputs.playerId);
+            if (ogPInput.playerId == pInputs.playerId) {
+                ogPInput = pInputs;
+                ogPInput.playerId = pInputs.playerId;
+                return;
+            }
         }
-        gInputState.playerInputs[playerNum] = pInputs;
+        PAB_ERR("Couldn't apply inputs for player id %d since inputs for that player doesn't exist", pInputs.playerId);
     }
 }
 
@@ -69,37 +78,32 @@ namespace pab::server {
         UpdateGame(gGameState, gInputState, dt);
     }
 
-    // Returns the player index of the new player
+    // Returns the player id of the new player
     uint8_t MakeNewPlayer() {
-        Player newPlayer = {
-            .active = true,
+        uint8_t pId = gNextPlayerId;
+        if ((gNextPlayerId + 1) < gNextPlayerId) {
+            PAB_ERR("Player id overflowed. Get ready for trouble.");
+        }
+        gNextPlayerId++;
+        gGameState.players[pId] = Player {
+            .id = pId,
+            .dead = false,
             .pos = Vector2 {0, 0}
         };
-        gGameState.players.push_back(newPlayer);
-        uint8_t newPlayerIdx = gGameState.players.size() - 1;
         PlayerInputState newInput = {
-            .playerIdx = newPlayerIdx
+            .playerId = pId
         };
         gInputState.playerInputs.push_back(newInput);
-        return newPlayerIdx;
+        PAB_INFO("> Registered new inputs with player id %d", newInput.playerId);
+        return pId;
     }
 
-    void RemovePlayer(uint8_t playerNum) {
-        if (playerNum >= gGameState.players.size()) {
-            PAB_ERR("Tried to remove nonexistant player #%d", playerNum);
+    void RemovePlayer(uint8_t playerId) {
+        if (!gGameState.players.contains(playerId)) {
+            PAB_ERR("Tried to remove nonexistant player id %d", playerId);
             return;
         }
-        //gGameState.players.erase(gGameState.players.begin() + playerNum);
-        // set it to false instead of erasing to not ruin the indexes for everyone 
-        // who joined after this person
-        gGameState.players[playerNum].active = false;
-        auto& inputs = gInputState.playerInputs;
-        for (auto it = inputs.begin(); it != inputs.end(); ++it) {
-            if (it->playerIdx == playerNum) {
-                inputs.erase(it);
-                break; 
-            }
-        }
+        gGameState.players.erase(playerId);
     }
 
     std::vector<uint8_t> MakeSnapshot() {
@@ -108,20 +112,22 @@ namespace pab::server {
         pb << (uint8_t)Command::SNAPSHOT
             << gTickNum
             << (uint8_t)gGameState.players.size();
-        for (size_t i = 0; i < gGameState.players.size(); i++) {
-            const Player& p = gGameState.players[i];
-            pb << (uint8_t)p.active
+        for (const auto& [id, p] : gGameState.players) {
+            pb << p.id
+                << (uint8_t)p.dead
                 << p.pos.x
                 << p.pos.y;
         }
         return pb.buffer;
     }
 
-    void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerNum)
+    void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerId)
     {
+        //PAB_INFO("Got inputs from player id %d", playerId);
         PlayerInputState pInputs = {};
         PacketReader pr(data);
         pr >> pInputs;
-        ApplyPlayerInputs(pInputs, playerNum);
+        pInputs.playerId = playerId;
+        ApplyPlayerInputs(pInputs);
     }
 }

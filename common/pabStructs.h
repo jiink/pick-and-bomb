@@ -8,21 +8,23 @@
 #include <raymath.h> 
 #include <vector>
 #include <cstdint>
+#include <unordered_map>
 
-const int TICK_HZ = 30;
+const int TICK_HZ = 10;
 
 struct Player
 {
-    bool active = false;
-    Vector2 pos;
+    uint8_t id = 0;
+    bool dead = false;
+    Vector2 pos = Vector2 {0, 0};
 };
 
 struct GameState {
-    std::vector<Player> players;
+    std::unordered_map<uint8_t, Player> players;
 };
 
 struct PlayerInputState {
-    uint8_t playerIdx = 0;
+    uint8_t playerId = 0;
     Vector2 direction = Vector2 {0, 0};
     bool attack = false;
     bool attackPressed = false;
@@ -40,7 +42,19 @@ struct InputState {
 
 enum class Command {
     SNAPSHOT,
-    INPUTS
+    INPUTS,
+    WELCOME
 };
 
 const size_t HEADER_SIZE = 5;
+
+// Subset of Player
+struct SnapshotPlayer {
+    uint8_t id = 0;
+    bool dead = true;
+    Vector2 pos = Vector2 {0, 0};
+};
+
+struct Snapshot {
+    std::vector<SnapshotPlayer> players;
+};

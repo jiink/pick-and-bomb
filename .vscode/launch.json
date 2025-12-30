@@ -5,11 +5,11 @@
       "version": "0.2.0",
       "configurations": [
         {
-          "name": "Debug",
+          "name": "Debug (Server)",
           "type": "cppdbg",
           "request": "launch",
-          "program": "${workspaceFolder}/${fileBasenameNoExtension}",
-          "args": [],
+          "program": "${workspaceFolder}/pick_and_bomb.exe",
+          "args": ["-s", "6789"],
           "stopAtEntry": false,
           "cwd": "${workspaceFolder}",
           "environment": [],
@@ -34,6 +34,63 @@
           "preLaunchTask": "build debug"
         },
         {
+          "name": "Debug (Client)",
+          "type": "cppdbg",
+          "request": "launch",
+          "program": "${workspaceFolder}/pick_and_bomb.exe",
+          "args": ["-c", "127.0.0.1", "6789"],
+          "stopAtEntry": false,
+          "cwd": "${workspaceFolder}",
+          "environment": [],
+          "externalConsole": false,
+          "MIMode": "gdb",
+          "setupCommands": [
+            {
+              "description": "Enable pretty-printing for gdb",
+              "text": "-enable-pretty-printing",
+              "ignoreFailures": false
+            }
+          ],
+          "windows": {
+            "miDebuggerPath": "C:/raylib/w64devkit/bin/gdb.exe",
+          },
+          "osx": {
+            "MIMode": "lldb"
+          },
+          "linux": {
+            "miDebuggerPath": "/usr/bin/gdb",
+          },
+          "preLaunchTask": "build debug"
+        },
+        {
+          "name": "Debug (Client, no building)",
+          "type": "cppdbg",
+          "request": "launch",
+          "program": "${workspaceFolder}/pick_and_bomb.exe",
+          "args": ["-c", "127.0.0.1", "6789"],
+          "stopAtEntry": false,
+          "cwd": "${workspaceFolder}",
+          "environment": [],
+          "externalConsole": false,
+          "MIMode": "gdb",
+          "setupCommands": [
+            {
+              "description": "Enable pretty-printing for gdb",
+              "text": "-enable-pretty-printing",
+              "ignoreFailures": false
+            }
+          ],
+          "windows": {
+            "miDebuggerPath": "C:/raylib/w64devkit/bin/gdb.exe",
+          },
+          "osx": {
+            "MIMode": "lldb"
+          },
+          "linux": {
+            "miDebuggerPath": "/usr/bin/gdb",
+          }
+        },
+        {
           "name": "Run",
           "type": "cppdbg",
           "request": "launch",
@@ -42,10 +99,10 @@
           "cwd": "${workspaceFolder}",
           "environment": [],
           "externalConsole": false,
-          "program": "${workspaceFolder}/${fileBasenameNoExtension}",
+          "program": "${workspaceFolder}/pick_and_bomb",
           "MIMode": "gdb",
           "windows": {
-            "program": "${workspaceFolder}/${fileBasenameNoExtension}.exe",
+            "program": "${workspaceFolder}/pick_and_bomb.exe",
             "miDebuggerPath": "C:/raylib/w64devkit/bin/gdb.exe"
           },
           "osx": {

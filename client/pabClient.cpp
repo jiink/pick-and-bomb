@@ -19,15 +19,24 @@ namespace {
     };
     std::deque<std::vector<uint8_t>> gNetPacketsToSend;
     uint32_t gTickNum = 0;
+    uint8_t gMyPlayerId = 0;
     const size_t MAX_PACKET_SIZE = 1000;
     const size_t MAX_PACKET_COUNT = 100;
+
+    Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
+        auto it = players.find(id);
+        if (it != players.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
 
     void DrawPlayer(const Player& player) {
         DrawCircleV(player.pos, 0.5f, DARKBLUE);
     }
 
-    void DrawPlayers(const std::vector<Player>& players) {
-        for (const Player& p : players) {
+    void DrawPlayers(const std::unordered_map<uint8_t, Player>& players) {
+        for (auto& [id, p] : players) {
             DrawPlayer(p);
         }
     }
@@ -85,7 +94,10 @@ namespace pab::client {
             ClearBackground(GRAY);
             DrawGameState(gGameState);
         EndMode2D();
-        DrawText(TextFormat("great..."), 10, 10, 20, BLACK);
+        DrawText(TextFormat("great...\n(%.2f, %.2f)", gInputs.direction.x, gInputs.direction.y), 10, 10, 20, BLACK);
+        // Player* myPlayer = GetPlayer(gGameState.players, gMyPlayerId);
+        // if (myPlayer) {
+        // }
     }
 
     void ApplySnapshot(std::vector<uint8_t> data) {
@@ -94,18 +106,25 @@ namespace pab::client {
         uint8_t numPlayers;
         pr >> numPlayers;
         for (size_t pI = 0; pI < numPlayers; pI++) {
+            uint8_t pId;
             uint8_t pActiveB;
             float pX;
             float pY;
-            pr >> pActiveB >> pX >> pY;
+            pr >> pId >> pActiveB >> pX >> pY;
             Player p = Player {
+                .id = pId,
                 .active = pActiveB > 0,
                 .pos = Vector2 {
                     .x = pX,
                     .y = pY
                 }
             };
-            gGameState.players.push_back(p);
+            gGameState.players[pId] = p;
         }
+    }
+
+    void SetPlayerId(uint8_t id) {
+        gMyPlayerId = id;
+        PAB_INFO(">>>> I AM PLAYER id %d", id);
     }
 }

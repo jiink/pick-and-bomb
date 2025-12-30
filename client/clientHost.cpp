@@ -27,19 +27,27 @@ static void ParsePacket(std::vector<uint8_t>& data) {
     uint32_t tick;
     PacketReader pr(data);
     pr >> cmdId >> tick;
-    // now remove the header so the next functions don't have to deal with it
-    data.erase(data.begin(), data.begin() + HEADER_SIZE);
+    // now remove the header so the next functions don't have to deal with it.
+    data.erase(data.begin(), data.begin() + HEADER_SIZE); // After this you may NOT keep using PacketReader pr.
     switch ((Command)cmdId) {
         case Command::SNAPSHOT:
+            //PAB_INFO("> Got a snapshot (#%d, %d B)", tick, data.size());
             pab::client::ApplySnapshot(data);
             break;
+        case Command::WELCOME: {
+            PacketReader pr2(data);
+            uint8_t playerId;
+            pr2 >> playerId;
+            pab::client::SetPlayerId(playerId);
+            break;
+        }
         default:
             PAB_WARN("Unhandled command %d", cmdId);
             break;
     }
 }
 
-static void ProcessEventsFromClient(ENetHost* host, bool* running) {
+static void ClientProcessEvents(ENetHost* host, bool* running) {
     const uint32_t enetWaitTimeMs = 0;
     ENetEvent event;
     while (enet_host_service(host, &event, enetWaitTimeMs) > 0) {
@@ -114,7 +122,7 @@ void RunClient(const std::string& ip, int port) {
     while (!WindowShouldClose() && running) {
         static int tickTimeStamp = 0;
         const int tickPeriodMs = (int)((1 / (float)TICK_HZ) * 1000);
-        ProcessEventsFromClient(clientHost, &running);
+        ClientProcessEvents(clientHost, &running);
         uint32_t timeSinceLastTick = Millis() - tickTimeStamp;
         uint32_t enetWaitTimeMs = tickPeriodMs - timeSinceLastTick;
         if (enetWaitTimeMs < 0) { enetWaitTimeMs = 0; }

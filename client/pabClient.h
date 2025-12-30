@@ -10,4 +10,5 @@ namespace pab::client {
     void Draw();
     void ApplySnapshot(std::vector<uint8_t> data);
     std::optional<std::vector<uint8_t>> ConsumePacketToSend();
+    void SetPlayerId(uint8_t id);
 }

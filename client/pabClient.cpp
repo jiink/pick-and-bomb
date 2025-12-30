@@ -106,7 +106,12 @@ namespace pab::client {
 
     void UpdateInterpolation(float dt) {
         if (gSnapshotBuffer.size() < 2) { return; }
-        gClientTimeS += dt;
+        float newestServerTimeS = gSnapshotBuffer.back().tick * (1.0f / TICK_HZ);
+        float targetClientTimeS = newestServerTimeS - INTERPOLATION_OFFSET_S;
+        float error = targetClientTimeS - gClientTimeS;
+        float timescale = 1.0f + (error * 5.0f);
+        timescale = std::clamp(timescale, 0.9f, 1.1f);
+        gClientTimeS += dt * timescale;
         // let it be so:
         // gSnapshotBuffer[0] is the previous tick
         // gSnapshotBuffer[1] is the next tick (i.e. the new/current tick to interpolate towards)
@@ -115,6 +120,7 @@ namespace pab::client {
         {
                 gSnapshotBuffer.pop_front();
         }
+        if (gSnapshotBuffer.size() < 2) { return; }
         const Snapshot& prev = gSnapshotBuffer[0];
         const Snapshot& next = gSnapshotBuffer[1];
         float prevTimeS = prev.tick * (1.0f / TICK_HZ);

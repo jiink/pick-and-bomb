@@ -1,0 +1,85 @@
+#include "common/pabStructs.h"
+#include "server/playfield.h"
+#include <vector>
+#include "playfield.h"
+
+// worldWidth: how many world units wide (e.g. meters) the playfield is
+// worldHeight: how many world units tall the playfield is
+// bucketSize: how many world units wide and tall each optimization grid cell is
+Playfield::Playfield(float worldWidth, float worldHeight, float bucketSize) {
+    _bucketSize = bucketSize;
+    _gridW = std::ceilf(worldWidth / _bucketSize);
+    _gridH = std::ceilf(worldHeight / _bucketSize);
+    _gridBuckets.resize(_gridW * _gridH);
+}
+
+bool Playfield::AddCell(Vector2 worldPos, CellType cType)
+{
+    Cell cell{};
+    cell.id = _cells.size();
+    cell.pos = worldPos;
+    cell.type = cType;
+    _cells.push_back(cell);
+    int bX = (int)(cell.pos.x / _bucketSize);
+    int bY = (int)(cell.pos.y / _bucketSize);
+    if (bX >= 0 && bX < _gridW &&
+        bY >= 0 && bY < _gridH)
+    {
+        _gridBuckets[bY * _gridW + bX].push_back(cell.id);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+Cell* Playfield::GetCellAtWorldPos(Vector2 pos)
+{
+    int bX = (int)(pos.x / _bucketSize);
+    int bY = (int)(pos.y / _bucketSize);
+    float minDist = 99999;
+    uint16_t closestIdx = 0;
+    bool foundClosestIdx = false;
+    for (int y = bY - 1; y <= bY + 1; y++) {
+        for (int x = bX - 1; x <= bX + 1; x++) {
+            bool inBounds = x >= 0 && x < _gridW &&
+                y >= 0 && y < _gridH;
+            if (!inBounds) {
+                continue;
+            }
+            const std::vector<int>& bucketIndices = _gridBuckets[y * _gridW + x];
+            for (int idx : bucketIndices) {
+                const Cell& c = _cells[idx];
+                float dist = Vector2DistanceSqr(pos, c.pos);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestIdx = idx;
+                    foundClosestIdx = true;
+                }
+            }
+        }
+    }
+    if (foundClosestIdx) {
+        return &_cells[closestIdx];
+    } else {
+        return nullptr;
+    }
+}
+
+void Playfield::DamageCell(Vector2 worldPos, float damage)
+{
+    Cell* cell = GetCellAtWorldPos(worldPos);
+    if (cell && cell->type != CellType::AIR) {
+        cell->health -= damage;
+        if (cell->health <= 0) {
+            cell->type = CellType::AIR;
+        }
+    }
+}
+
+bool Playfield::IsInitialized()
+{
+    return _gridW > 0 && 
+        _gridH > 0 && 
+        _cells.size() > 0 && 
+        _gridBuckets.size() > 0;
+}

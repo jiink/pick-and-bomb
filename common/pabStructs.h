@@ -12,7 +12,7 @@
 #include <array>
 #include <optional>
 
-const int TICK_HZ = 10;
+const int TICK_HZ = 30;
 
 struct Player
 {
@@ -24,7 +24,25 @@ struct Player
     bool renderable = false;
 };
 
+enum class CellType {
+    AIR,
+    DIRT,
+    STONE,
+    TREASURE,
+    WALL,
+    MAX_CELL_TYPES
+};
+
+// Struct to represent a cell in the playfield
+struct Cell {
+    uint16_t id;
+    Vector2 pos;
+    CellType type;
+    float health;
+};
+
 struct GameState {
+
     std::unordered_map<uint8_t, Player> players;
 };
 

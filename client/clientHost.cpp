@@ -32,7 +32,7 @@ static void ParsePacket(std::vector<uint8_t>& data) {
     switch ((Command)cmdId) {
         case Command::SNAPSHOT:
             //PAB_INFO("> Got a snapshot (#%d, %d B)", tick, data.size());
-            pab::client::ApplySnapshot(tick, data);
+            pab::client::NetApplySnapshot(tick, data);
             break;
         case Command::WELCOME: {
             PacketReader pr2(data);
@@ -41,6 +41,9 @@ static void ParsePacket(std::vector<uint8_t>& data) {
             pab::client::SetPlayerId(playerId);
             break;
         }
+        case Command::NEW_PLAYER:
+            pab::client::NetApplyNewPlayer(data);
+            break;
         default:
             PAB_WARN("Unhandled command %d", cmdId);
             break;

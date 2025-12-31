@@ -9,6 +9,7 @@
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <array>
 
 const int TICK_HZ = 10;
 
@@ -17,6 +18,9 @@ struct Player
     uint8_t id = 0;
     bool dead = false;
     Vector2 pos = Vector2 {0, 0};
+    float hue = 0.0f;
+    // client side
+    bool renderable = false;
 };
 
 struct GameState {
@@ -44,8 +48,21 @@ struct InputState {
 enum class Command {
     SNAPSHOT,
     INPUTS,
-    WELCOME
+    WELCOME,
+    NEW_PLAYER,
+    COMMAND_COUNT
 };
+
+struct CommandConfig {
+    bool isReliable;
+};
+
+constexpr std::array<CommandConfig, static_cast<size_t>(Command::COMMAND_COUNT)> CommandRegistry = {{
+    [static_cast<size_t>(Command::SNAPSHOT)]   = { .isReliable = false },
+    [static_cast<size_t>(Command::INPUTS)]     = { .isReliable = false },
+    [static_cast<size_t>(Command::WELCOME)]    = { .isReliable = true },
+    [static_cast<size_t>(Command::NEW_PLAYER)] = { .isReliable = true },
+}};
 
 const size_t HEADER_SIZE = 5;
 

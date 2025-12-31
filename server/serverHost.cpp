@@ -68,7 +68,7 @@ static void ServerProcessEvents(ENetHost* serverHost, uint32_t waitMs) {
         switch (event.type) {
             case ENET_EVENT_TYPE_CONNECT: {
                 PAB_INFO("New client connected from %s", FormatIp(&event.peer->address.host));
-                gPeerToPlayerId[event.peer] = pab::server::MakeNewPlayer();
+                gPeerToPlayerId[event.peer] = pab::server::OnNewPlayerJoin();
                 PAB_INFO("Made new player, id %d", gPeerToPlayerId[event.peer]);
                 PacketBuilder pb;
                 pb << (uint8_t)Command::WELCOME << (uint32_t)0 << gPeerToPlayerId[event.peer];
@@ -131,13 +131,18 @@ void RunServer(int port) {
         if (Millis() - tickTimeStamp > tickPeriodMs) {
             tickTimeStamp = Millis();
             pab::server::Tick();
-            // todo get a list of all packets the server wants to send?
-            auto snapshot = pab::server::MakeSnapshot();
-            if (!snapshot.empty()) {
+            while (auto packetDataOpt = pab::server::ConsumePacketToSend()) {
+                uint8_t cmd = (*packetDataOpt).data()[0];
+                uint32_t packetFlags = 0;
+                if (cmd < (uint8_t)Command::COMMAND_COUNT) {
+                    packetFlags = CommandRegistry[cmd].isReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
+                } else {
+                    PAB_ERR("No command registry entry for command %d", cmd);
+                }
                 ENetPacket* packet = enet_packet_create(
-                    snapshot.data(),
-                    snapshot.size(),
-                    0
+                    (*packetDataOpt).data(),
+                    (*packetDataOpt).size(),
+                    packetFlags
                 );
                 enet_host_broadcast(serverHost, 0, packet);
             }

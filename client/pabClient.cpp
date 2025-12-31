@@ -41,11 +41,13 @@ namespace {
         if (it != players.end()) {
             return &it->second;
         }
+        PAB_WARN("Player id %d not found", id);
         return nullptr;
     }
 
     void DrawPlayer(const Player& player) {
-        DrawCircleV(player.pos, 0.5f, DARKBLUE);
+        if (!player.renderable) { return; }
+        DrawCircleV(player.pos, 0.5f, ColorFromHSV(player.hue, 1.0f, 1.0f));
     }
 
     void DrawPlayers(const std::unordered_map<uint8_t, Player>& players) {
@@ -80,7 +82,7 @@ namespace {
             << inputs.playerId << inputs.direction.x << inputs.direction.y
             << inputs.attack << inputs.attackPressed << inputs.attackReleased
             << inputs.wepSelectPressed << inputs.leftPressed << inputs.rightPressed;
-        NetAddPacket(pb.buffer);
+        NetAddPacket(std::move(pb.buffer));
     }
 }
 
@@ -131,12 +133,21 @@ namespace pab::client {
             alpha = (gClientTimeS - prevTimeS) / duration;
         }
         alpha = std::clamp(alpha, 0.0f, 1.0f);
-        gGameState.players.clear();
+        // Don't show players that aren't in the snapshot
+        for (auto& [id, player] : gGameState.players) {
+            player.renderable = false;
+        }
+        // Update players that are in the new snapshot
         for (const SnapshotPlayer& nextP : next.players) {
-            const SnapshotPlayer* prevP = FindPlayerInSnapshot(prev, nextP.id);
-            Player visualP;
+            if (!gGameState.players.contains(nextP.id)) {
+                PAB_ERR("Got snapshot for player %d out of nowhere", nextP.id);
+                continue;
+            }
+            Player& visualP = gGameState.players[nextP.id];
+            visualP.renderable = true;
             visualP.id = nextP.id;
             visualP.dead = nextP.dead;
+            const SnapshotPlayer* prevP = FindPlayerInSnapshot(prev, nextP.id);
             if (prevP) {
                 visualP.pos = Vector2Lerp(prevP->pos, nextP.pos, alpha);
             } else {
@@ -158,7 +169,7 @@ namespace pab::client {
         // }
     }
 
-    void ApplySnapshot(uint32_t serverTick, std::vector<uint8_t> data) {
+    void NetApplySnapshot(uint32_t serverTick, std::vector<uint8_t> data) {
         PacketReader pr(data);
         uint8_t numPlayers;
         pr >> numPlayers;
@@ -178,6 +189,14 @@ namespace pab::client {
             gFirstSnapshotReceived = true;
             gClientTimeS = (newSnap.tick * (1.0f / TICK_HZ) - INTERPOLATION_OFFSET_S);
         }
+    }
+
+    void NetApplyNewPlayer(std::vector<uint8_t> data) {
+        PacketReader pr(data);
+        Player newP = {};
+        pr >> newP.id >> newP.dead >> newP.pos >> newP.hue;
+        PAB_INFO("Got info for a new player (id %d)!", newP.id);
+        gGameState.players[newP.id] = newP;
     }
 
     void SetPlayerId(uint8_t id) {

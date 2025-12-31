@@ -9,6 +9,16 @@
 #include "common/packetBuilder.h"
 
 std::map<ENetPeer*, uint8_t> gPeerToPlayerId;
+std::map<uint8_t, ENetPeer*> gPlayerIdToPeer;
+
+static void CleanUpDisconnectedClient(ENetPeer* peer) {
+    if (!gPeerToPlayerId.contains(peer)) { return; }
+    uint8_t playerId = gPeerToPlayerId[peer];
+    pab::server::RemovePlayer(playerId);
+    gPlayerIdToPeer.erase(playerId);
+    gPeerToPlayerId.erase(peer);
+    PAB_INFO("Cleaned up player id %d", playerId);
+}
 
 const char* FormatIp(const struct in6_addr* addr) {
     static thread_local char str[INET6_ADDRSTRLEN];
@@ -25,17 +35,6 @@ static ENetHost* CreateServerHost(int port) {
         PAB_ERR("failed to create ENet server host");
     }
     return host;
-}
-
-static void CleanUpDisconnectedClient(ENetPeer* peer) {
-    if (gPeerToPlayerId.find(peer) == gPeerToPlayerId.end()) {
-        PAB_WARN("Client disconnected, but it has no player to remove");
-        return;
-    }
-    int playerNum = gPeerToPlayerId[peer];
-    pab::server::RemovePlayer(playerNum);
-    gPeerToPlayerId.erase(peer);
-    PAB_INFO("Cleaned up player #%d", playerNum);
 }
 
 static void ParsePacket(std::vector<uint8_t>& data, uint8_t playerNum) {
@@ -68,16 +67,10 @@ static void ServerProcessEvents(ENetHost* serverHost, uint32_t waitMs) {
         switch (event.type) {
             case ENET_EVENT_TYPE_CONNECT: {
                 PAB_INFO("New client connected from %s", FormatIp(&event.peer->address.host));
-                gPeerToPlayerId[event.peer] = pab::server::OnNewPlayerJoin();
-                PAB_INFO("Made new player, id %d", gPeerToPlayerId[event.peer]);
-                PacketBuilder pb;
-                pb << (uint8_t)Command::WELCOME << (uint32_t)0 << gPeerToPlayerId[event.peer];
-                ENetPacket* packet = enet_packet_create(
-                    pb.buffer.data(),
-                    pb.buffer.size(),
-                    ENET_PACKET_FLAG_RELIABLE
-                );
-                enet_peer_send(event.peer, 0, packet);
+                uint8_t newId = pab::server::OnNewPlayerJoin();
+                gPeerToPlayerId[event.peer] = newId;
+                gPlayerIdToPeer[newId] = event.peer;
+                PAB_INFO("Made new player, id %d", newId);
                 break;
             }
             case ENET_EVENT_TYPE_RECEIVE: {
@@ -131,8 +124,9 @@ void RunServer(int port) {
         if (Millis() - tickTimeStamp > tickPeriodMs) {
             tickTimeStamp = Millis();
             pab::server::Tick();
-            while (auto packetDataOpt = pab::server::ConsumePacketToSend()) {
-                uint8_t cmd = (*packetDataOpt).data()[0];
+            while (auto packetOpt = pab::server::ConsumePacketToSend()) {
+                auto& [data, targetIdOpt] = *packetOpt;
+                uint8_t cmd = data[0];
                 uint32_t packetFlags = 0;
                 if (cmd < (uint8_t)Command::COMMAND_COUNT) {
                     packetFlags = CommandRegistry[cmd].isReliable ? ENET_PACKET_FLAG_RELIABLE : 0;
@@ -140,11 +134,21 @@ void RunServer(int port) {
                     PAB_ERR("No command registry entry for command %d", cmd);
                 }
                 ENetPacket* packet = enet_packet_create(
-                    (*packetDataOpt).data(),
-                    (*packetDataOpt).size(),
+                    data.data(),
+                    data.size(),
                     packetFlags
                 );
-                enet_host_broadcast(serverHost, 0, packet);
+                if (targetIdOpt.has_value()) {
+                    uint8_t targetPlayerId = targetIdOpt.value();
+                    if (gPlayerIdToPeer.contains(targetPlayerId)) {
+                        enet_peer_send(gPlayerIdToPeer[targetPlayerId], 0, packet);
+                    } else {
+                        PAB_WARN("No client for player id %d to send packet to", targetPlayerId);
+                        enet_packet_destroy(packet);
+                    }
+                } else {
+                    enet_host_broadcast(serverHost, 0, packet);
+                }
             }
         }
     }

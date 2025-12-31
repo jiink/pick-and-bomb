@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <array>
+#include <optional>
 
 const int TICK_HZ = 10;
 
@@ -76,4 +77,9 @@ struct SnapshotPlayer {
 struct Snapshot {
     uint32_t tick = 0;
     std::vector<SnapshotPlayer> players;
+};
+
+struct OutgoingPacket {
+    std::vector<uint8_t> data;
+    std::optional<uint8_t> targetPlayerId;
 };

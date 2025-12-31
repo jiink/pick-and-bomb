@@ -11,7 +11,7 @@ namespace {
     InputState gInputState;
     uint32_t gTickNum = 0;
     uint8_t gNextPlayerId = 0;
-    std::deque<std::vector<uint8_t>> gNetPacketsToSend;
+    std::deque<OutgoingPacket> gNetPacketsToSend;
     const size_t MAX_PACKET_SIZE = 1000;
     const size_t MAX_PACKET_COUNT = 100;
 
@@ -71,7 +71,7 @@ namespace {
         PAB_ERR("Couldn't apply inputs for player id %d since inputs for that player doesn't exist", pInputs.playerId);
     }
 
-    void NetAddPacket(std::vector<uint8_t> packet) {
+    void NetAddPacket(std::vector<uint8_t> packet, std::optional<uint8_t> targetId = std::nullopt) {
         if (packet.size() > MAX_PACKET_SIZE) {
             PAB_ERR("Packet too big (%d B > %d B)",
                 packet.size(), MAX_PACKET_SIZE);
@@ -82,7 +82,13 @@ namespace {
                 gNetPacketsToSend.size(), MAX_PACKET_COUNT);
             return;
         }
-        gNetPacketsToSend.push_back(std::move(packet));
+        gNetPacketsToSend.push_back({ std::move(packet), targetId });
+    }
+
+    void NetSendWelcome(uint8_t playerId) {
+        PacketBuilder pb;
+        pb << (uint8_t)Command::WELCOME << uint32_t(0) << playerId;
+        NetAddPacket(std::move(pb.buffer), playerId);
     }
 
     void NetSendSnapshot() {
@@ -102,13 +108,16 @@ namespace {
 }
 
 namespace pab::server {
-    std::optional<std::vector<uint8_t>> ConsumePacketToSend() {
+    std::optional<OutgoingPacket> ConsumePacketToSend() {
         if (gNetPacketsToSend.empty()) {
             return std::nullopt;
         }
-        std::vector<uint8_t> packet = std::move(gNetPacketsToSend.front());
+        OutgoingPacket out = {
+            .data = std::move(gNetPacketsToSend.front().data),
+            .targetPlayerId = gNetPacketsToSend.front().targetPlayerId
+        };
         gNetPacketsToSend.pop_front();
-        return packet;
+        return out;
     }
 
     void Init(void) {
@@ -144,7 +153,7 @@ namespace pab::server {
         return pId;
     }
 
-    void NetSendNewPlayer(uint8_t playerId) {
+    void NetSendNewPlayer(uint8_t playerId, std::optional<uint8_t> targetId) {
         Player* newP = GetPlayer(gGameState.players, playerId);
         if (!newP) {
             return;
@@ -157,7 +166,7 @@ namespace pab::server {
             << newP->dead
             << newP->pos
             << newP->hue;
-        NetAddPacket(std::move(pb.buffer));
+        NetAddPacket(std::move(pb.buffer), targetId);
     }
 
     void RemovePlayer(uint8_t playerId) {
@@ -183,7 +192,13 @@ namespace pab::server {
     // Returns id of the new player
     uint8_t OnNewPlayerJoin() {
         uint8_t newId = MakeNewPlayer();
-        NetSendNewPlayer(newId);
+        NetSendWelcome(newId);
+        NetSendNewPlayer(newId, std::nullopt);
+        // The new player needs to know about all existing players, not just himself
+        for (const auto& [existingId, p] : gGameState.players) {
+            if (existingId == newId) { continue; }
+            NetSendNewPlayer(existingId, newId);
+        }
         return newId;
     }
 }

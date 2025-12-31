@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <optional>
+#include "common/pabStructs.h"
 namespace pab::server {
     void Init();
     void Tick();
@@ -9,5 +10,5 @@ namespace pab::server {
     void RemovePlayer(uint8_t playerId);
     uint8_t OnNewPlayerJoin();
     void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerId);
-    std::optional<std::vector<uint8_t>> ConsumePacketToSend();
+    std::optional<OutgoingPacket> ConsumePacketToSend();
 }

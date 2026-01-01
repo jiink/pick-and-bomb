@@ -1,5 +1,5 @@
 #include "common/pabStructs.h"
-#include "server/playfield.h"
+#include "common/playfield.h"
 #include <vector>
 #include "playfield.h"
 
@@ -11,6 +11,10 @@ Playfield::Playfield(float worldWidth, float worldHeight, float bucketSize) {
     _gridW = std::ceilf(worldWidth / _bucketSize);
     _gridH = std::ceilf(worldHeight / _bucketSize);
     _gridBuckets.resize(_gridW * _gridH);
+}
+
+Playfield::Playfield() {
+    
 }
 
 bool Playfield::AddCell(Vector2 worldPos, CellType cType)

@@ -5,13 +5,14 @@
 #include "common/packetBuilder.h"
 #include <deque>
 #include <optional>
+#include <string>
 
 namespace {
-    GameState gGameState;
-    InputState gInputState;
-    uint32_t gTickNum = 0;
-    uint8_t gNextPlayerId = 0;
-    std::deque<OutgoingPacket> gNetPacketsToSend;
+    GameState _gameState;
+    InputState _inputState;
+    uint32_t _tickNum = 0;
+    uint8_t _nextPlayerId = 0;
+    std::deque<OutgoingPacket> _netPacketsToSend;
     const size_t MAX_PACKET_SIZE = 1000;
     const size_t MAX_PACKET_COUNT = 100;
 
@@ -44,6 +45,38 @@ namespace {
         PlayerInputState defaultInputs = {0};
         return defaultInputs;
     }
+    
+    void DebugPlayfield(Playfield& pf) {
+        std::string debugStr;
+        for (int y = 0; y < 50; y++) {
+            for (int x = 0; x < 50; x++) {
+                Vector2 samplePt = Vector2 {(float)x, (float)y};
+                Cell* cell = pf.GetCellAtWorldPos(samplePt);
+                if (cell == nullptr) {
+                    debugStr += 'X';
+                } else {
+                    int cellTypeAsInt = (int)(cell->type);
+                    debugStr += std::to_string(cellTypeAsInt);
+                }
+            }
+            debugStr += '\n';
+        }
+        PAB_INFO("%s", debugStr.c_str());
+    }
+
+    void SetupPlayfield(GameState& state) {
+        Playfield newPField = Playfield(50.0f, 50.0f, 10.0f);
+        newPField.AddCell({9, 7}, CellType::DIRT);
+        newPField.AddCell({36, 13}, CellType::STONE);
+        newPField.AddCell({11, 21}, CellType::TREASURE);
+        newPField.AddCell({43, 25}, CellType::WALL);
+        newPField.AddCell({27, 29}, CellType::AIR);
+        newPField.AddCell({17, 37}, CellType::DIRT);
+        newPField.AddCell({41, 41}, CellType::DIRT);
+        state.playfield = newPField;
+        PAB_INFO("Playfield set up");
+        DebugPlayfield(state.playfield);
+    }
 
     void UpdateGame(
         GameState& state, 
@@ -60,7 +93,7 @@ namespace {
     } 
 
     void ApplyPlayerInputs(const PlayerInputState& pInputs) {
-        for (PlayerInputState& ogPInput : gInputState.playerInputs) {
+        for (PlayerInputState& ogPInput : _inputState.playerInputs) {
             //PAB_INFO(">> ogPInput.playerId == playerId -> %d == %d", ogPInput.playerId, pInputs.playerId);
             if (ogPInput.playerId == pInputs.playerId) {
                 ogPInput = pInputs;
@@ -77,12 +110,12 @@ namespace {
                 packet.size(), MAX_PACKET_SIZE);
             return;
         }
-        if (gNetPacketsToSend.size() > MAX_PACKET_COUNT) {
+        if (_netPacketsToSend.size() > MAX_PACKET_COUNT) {
             PAB_ERR("Too many packets this tick (%d > %d)",
-                gNetPacketsToSend.size(), MAX_PACKET_COUNT);
+                _netPacketsToSend.size(), MAX_PACKET_COUNT);
             return;
         }
-        gNetPacketsToSend.push_back({ std::move(packet), targetId });
+        _netPacketsToSend.push_back({ std::move(packet), targetId });
     }
 
     void NetSendWelcome(uint8_t playerId) {
@@ -95,9 +128,9 @@ namespace {
         PacketBuilder pb;
         pb.buffer.reserve(512);
         pb << (uint8_t)Command::SNAPSHOT
-            << gTickNum
-            << (uint8_t)gGameState.players.size();
-        for (const auto& [id, p] : gGameState.players) {
+            << _tickNum
+            << (uint8_t)_gameState.players.size();
+        for (const auto& [id, p] : _gameState.players) {
             pb << p.id
                 << (uint8_t)p.dead
                 << p.pos.x
@@ -109,37 +142,38 @@ namespace {
 
 namespace pab::server {
     std::optional<OutgoingPacket> ConsumePacketToSend() {
-        if (gNetPacketsToSend.empty()) {
+        if (_netPacketsToSend.empty()) {
             return std::nullopt;
         }
         OutgoingPacket out = {
-            .data = std::move(gNetPacketsToSend.front().data),
-            .targetPlayerId = gNetPacketsToSend.front().targetPlayerId
+            .data = std::move(_netPacketsToSend.front().data),
+            .targetPlayerId = _netPacketsToSend.front().targetPlayerId
         };
-        gNetPacketsToSend.pop_front();
+        _netPacketsToSend.pop_front();
         return out;
     }
 
     void Init(void) {
         PAB_INFO("Initializing game state on server");
+        SetupPlayfield(_gameState);
     }
 
     void Tick(void) {
-        gTickNum++;
+        _tickNum++;
         const float dt = 1 / (float)TICK_HZ;
-        //PAB_INFO("Tick %d of %d ms (%.1f s)", gTickNum, (int)(dt * 1000), (gTickNum * dt));
-        UpdateGame(gGameState, gInputState, dt);
+        //PAB_INFO("Tick %d of %d ms (%.1f s)", _tickNum, (int)(dt * 1000), (_tickNum * dt));
+        UpdateGame(_gameState, _inputState, dt);
         NetSendSnapshot();
     }
 
     // Returns the player id of the new player
     uint8_t MakeNewPlayer() {
-        uint8_t pId = gNextPlayerId;
-        if ((gNextPlayerId + 1) < gNextPlayerId) {
+        uint8_t pId = _nextPlayerId;
+        if ((_nextPlayerId + 1) < _nextPlayerId) {
             PAB_ERR("Player id overflowed. Get ready for trouble.");
         }
-        gNextPlayerId++;
-        gGameState.players[pId] = Player {
+        _nextPlayerId++;
+        _gameState.players[pId] = Player {
             .id = pId,
             .dead = false,
             .pos = Vector2 {0, 0},
@@ -148,20 +182,20 @@ namespace pab::server {
         PlayerInputState newInput = {
             .playerId = pId
         };
-        gInputState.playerInputs.push_back(newInput);
+        _inputState.playerInputs.push_back(newInput);
         PAB_INFO("> Registered new inputs with player id %d", newInput.playerId);
         return pId;
     }
 
     void NetSendNewPlayer(uint8_t playerId, std::optional<uint8_t> targetId) {
-        Player* newP = GetPlayer(gGameState.players, playerId);
+        Player* newP = GetPlayer(_gameState.players, playerId);
         if (!newP) {
             return;
         }
         PacketBuilder pb;
         pb.buffer.reserve(sizeof(Player));
         pb << (uint8_t)Command::NEW_PLAYER
-            << gTickNum
+            << _tickNum
             << newP->id
             << newP->dead
             << newP->pos
@@ -170,11 +204,11 @@ namespace pab::server {
     }
 
     void RemovePlayer(uint8_t playerId) {
-        if (!gGameState.players.contains(playerId)) {
+        if (!_gameState.players.contains(playerId)) {
             PAB_ERR("Tried to remove nonexistant player id %d", playerId);
             return;
         }
-        gGameState.players.erase(playerId);
+        _gameState.players.erase(playerId);
     }    
 
     void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerId)
@@ -195,7 +229,7 @@ namespace pab::server {
         NetSendWelcome(newId);
         NetSendNewPlayer(newId, std::nullopt);
         // The new player needs to know about all existing players, not just himself
-        for (const auto& [existingId, p] : gGameState.players) {
+        for (const auto& [existingId, p] : _gameState.players) {
             if (existingId == newId) { continue; }
             NetSendNewPlayer(existingId, newId);
         }

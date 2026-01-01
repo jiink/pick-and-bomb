@@ -32,7 +32,7 @@ namespace {
     float _clientTimeS = 0.0f;
     bool _firstSnapshotReceived = false;
     Shader _playfieldShader;
-    Texture _dummyTex;
+    Texture _playfieldTex;
 
     const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
         for (const auto& p : snap.players) {
@@ -63,11 +63,10 @@ namespace {
 
     void DrawPlayfield(const Playfield& playfield) {
         BeginShaderMode(_playfieldShader);
-        //     DrawRectangle(0, 0, playfield._worldWidth, playfield._worldHeight, WHITE);
-        DrawTexturePro(_dummyTex,
-            Rectangle {0, 0, (float)_dummyTex.width, (float)_dummyTex.height},
-            Rectangle {0, 0, playfield._worldWidth, playfield._worldHeight},
-            Vector2 {0, 0}, 0.0f, WHITE);
+            DrawTexturePro(_playfieldTex,
+                Rectangle {0, 0, (float)_playfieldTex.width, (float)_playfieldTex.height},
+                Rectangle {0, 0, playfield._worldWidth, playfield._worldHeight},
+                Vector2 {0, 0}, 0.0f, WHITE);
         EndShaderMode();
         }
 
@@ -103,8 +102,8 @@ namespace {
 
     void DebugPlayfield(Playfield& pf) {
         std::string debugStr;
-        for (int y = 0; y < 50; y++) {
-            for (int x = 0; x < 50; x++) {
+        for (int y = 0; y < (int)pf._worldHeight; y++) {
+            for (int x = 0; x < (int)pf._worldWidth; x++) {
                 Vector2 samplePt = Vector2 {(float)x, (float)y};
                 Cell* cell = pf.GetCellAtWorldPos(samplePt);
                 if (cell == nullptr) {
@@ -117,6 +116,35 @@ namespace {
             debugStr += '\n';
         }
         PAB_INFO("%s", debugStr.c_str());
+    }
+
+    Image GenPlayfieldImage(Playfield& pf, int pixPerWorldUnit) {
+        int imW = std::floorf(pf._worldWidth) * pixPerWorldUnit;
+        int imH = std::floorf(pf._worldHeight) * pixPerWorldUnit;
+        Image pfImage = GenImageColor(imW, imH, BLACK);
+        Color* pixels = (Color*)pfImage.data;
+        for (int y = 0; y < imH; y++) {
+            for (int x = 0; x < imW; x++) {
+                Vector2 samplePos = Vector2 {
+                    x / (float)pixPerWorldUnit,
+                    y / (float)pixPerWorldUnit
+                };
+                Cell* cell = pf.GetCellAtWorldPos(samplePos);
+                CellType cellType = CellType::AIR;
+                if (cell) {
+                    cellType = cell->type;
+                }
+                Color pixCol = Color { (uint8_t)cellType, 0, 0, 255 };
+                int idx = y * imW + x;
+                pixels[idx] = pixCol;
+            }
+        }
+        return pfImage;
+    }
+
+    void UpdatePlayfieldTex(Playfield& pf) {
+        Image newPfImg = GenPlayfieldImage(pf, 16);
+        _playfieldTex = LoadTextureFromImage(newPfImg);
     }
 }
 
@@ -133,8 +161,64 @@ namespace pab::client {
     void Init() {
         InitPlayerBindings(_inputBindings, 0);
         _playfieldShader = LoadShaderFromMemory(0, Shaders::playfield);
+        int paletteLoc = GetShaderLocation(_playfieldShader, "palette");
+        float paletteData[256 * 4];
+        for (int i = 0; i < 256; i++) {
+            int baseIndex = i * 4;
+            if (i >= (int)CellType::MAX_CELL_TYPES) {
+                paletteData[baseIndex + 0] = 1.0f;
+                paletteData[baseIndex + 1] = 0.0f;
+                paletteData[baseIndex + 2] = 1.0f;
+                paletteData[baseIndex + 3] = 1.0f;
+            }
+            CellType ct = (CellType)i;
+            uint8_t r, g, b, a;
+            switch(ct) {
+                case CellType::AIR:
+                    r = 0;
+                    g = 255;
+                    b = 255;
+                    a = 0;
+                    break;
+                case CellType::DIRT:
+                    r = 127;
+                    g = 51;
+                    b = 0;
+                    a = 255;
+                    break;
+                case CellType::STONE:
+                    r = 112;
+                    g = 98;
+                    b = 89;
+                    a = 255;
+                    break;
+                case CellType::TREASURE:
+                    r = 255;
+                    g = 255;
+                    b = 0;
+                    a = 255;
+                    break;
+                case CellType::WALL:
+                    r = 65;
+                    g = 24;
+                    b = 112;
+                    a = 255;
+                    break;
+                default:
+                    r = 255;
+                    g = 0;
+                    b = 255;
+                    a = 255;
+                    break;
+            }
+            paletteData[baseIndex + 0] = r / 255.0f;
+            paletteData[baseIndex + 1] = g / 255.0f;
+            paletteData[baseIndex + 2] = b / 255.0f;
+            paletteData[baseIndex + 3] = a / 255.0f;
+        }
+        SetShaderValueV(_playfieldShader, paletteLoc, paletteData, SHADER_UNIFORM_VEC4, 256);
         Image dummyImg = GenImageChecked(16, 16, 1, 1, RED, BLUE);
-        _dummyTex = LoadTextureFromImage(dummyImg);
+        _playfieldTex = LoadTextureFromImage(dummyImg);
     }
 
     void Tick() {
@@ -253,6 +337,7 @@ namespace pab::client {
         }
         PAB_INFO("Applied new playfield");
         DebugPlayfield(_gameState.playfield);
+        UpdatePlayfieldTex(_gameState.playfield);
     }
 
     void SetPlayerId(uint8_t id)

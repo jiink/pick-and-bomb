@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voronoi Level Editor Optimized</title>
+    <title>Voronoi Level Editor - With Nudge Tool</title>
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
     <style>
         :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
@@ -36,7 +36,8 @@
         .p-btn.selected { border-color: white; transform: scale(1.05); box-shadow: 0 0 8px rgba(0,0,0,0.5); z-index: 10; }
         /* Mode Switcher */
         .mode-switch { display: flex; background: #333; border-radius: 4px; overflow: hidden; }
-        .mode-opt { flex: 1; padding: 8px 12px; cursor: pointer; text-align: center; font-size: 0.9rem; user-select: none; }
+        .mode-opt { flex: 1; padding: 8px 12px; cursor: pointer; text-align: center; font-size: 0.9rem; user-select: none; border-right: 1px solid #444; }
+        .mode-opt:last-child { border-right: none; }
         .mode-opt.active { background: var(--accent); color: white; font-weight: bold; }
         .mode-opt:not(.active):hover { background: #444; }
         /* Canvas */
@@ -63,7 +64,7 @@
 </head>
 <body>
 
-    <h1>Voronoi Editor (Optimized)</h1>
+    <h1>Voronoi Editor (Nudge Tool)</h1>
 
     <div class="controls">
         <div class="control-group">
@@ -80,8 +81,9 @@
             <div class="mode-switch">
                 <div class="mode-opt active" id="mode-place" onclick="setMode('PLACE')">Place</div>
                 <div class="mode-opt" id="mode-paint" onclick="setMode('PAINT')">Paint</div>
+                <div class="mode-opt" id="mode-nudge" onclick="setMode('NUDGE')">Nudge</div>
             </div>
-            <div style="margin-top:5px; font-size: 0.75rem; color:#777; max-width: 140px;">
+            <div style="margin-top:5px; font-size: 0.75rem; color:#777; max-width: 150px; text-align:center; min-height:1.2em;">
                 <span id="mode-desc">Click to add points.</span>
             </div>
         </div>
@@ -213,7 +215,12 @@
             currentMode = mode;
             document.getElementById('mode-place').classList.toggle('active', mode === 'PLACE');
             document.getElementById('mode-paint').classList.toggle('active', mode === 'PAINT');
-            document.getElementById('mode-desc').innerText = mode === 'PLACE' ? "Click/Drag to add cells." : "Drag to recolor cells.";
+            document.getElementById('mode-nudge').classList.toggle('active', mode === 'NUDGE');
+            
+            const desc = document.getElementById('mode-desc');
+            if(mode === 'PLACE') desc.innerText = "Click/Drag to add cells.";
+            else if(mode === 'PAINT') desc.innerText = "Drag to recolor cells.";
+            else if(mode === 'NUDGE') desc.innerText = "Drag to randomize positions.";
         }
 
         function updateMousePos(e) {
@@ -273,7 +280,6 @@
             if (lastMouseX === null) { lastMouseX = currX; lastMouseY = currY; }
 
             // OPTIMIZATION: Interpolate between last mouse position and current
-            // This prevents "sprinkling dots" when moving mouse fast
             const dist = Math.hypot(currX - lastMouseX, currY - lastMouseY);
             // Step size roughly half a unit to catch all cells
             const step = 0.5; 
@@ -294,20 +300,16 @@
             // PAINT MODE
             if (currentMode === 'PAINT') {
                 if (!delaunay) return;
-                const idx = delaunay.find(wx, wy); // Very fast
+                const idx = delaunay.find(wx, wy); 
                 
                 if (idx !== -1) {
                     if (selectedType.id === -1) {
-                        // Delete requires geometry rebuild
                         points.splice(idx, 1);
-                        // If we delete, we must rebuild delaunay immediately for next step
-                        // (Can be optimized further, but acceptable for delete)
                         recomputeGeometry(); 
                         geometryDirty = true;
                     } else if (points[idx].typeId !== selectedType.id) {
-                        // Just a color change
                         points[idx].typeId = selectedType.id;
-                        paintDirtyIdx.add(idx); // Mark for partial render
+                        paintDirtyIdx.add(idx); 
                     }
                 }
                 return;
@@ -315,7 +317,6 @@
 
             // PLACE MODE
             if (currentMode === 'PLACE') {
-                // Check density to prevent infinite stacking
                 let tooClose = false;
                 if(delaunay) {
                     const idx = delaunay.find(wx, wy);
@@ -328,9 +329,48 @@
 
                 if (!tooClose && selectedType.id !== -1) {
                     points.push({ x: wx, y: wy, typeId: selectedType.id });
-                    // Quick recompute needed for next insertion check
                     recomputeGeometry();
                     geometryDirty = true;
+                }
+            }
+
+            // NUDGE MODE
+            if (currentMode === 'NUDGE') {
+                if (!delaunay || points.length === 0) return;
+                
+                // Radius of effect (squared)
+                const radiusSq = 3 * 3; 
+                // Nudge strength
+                const strength = 0.4; 
+
+                // Optimization: Find the closest point and check its neighbors
+                // This avoids looping through thousands of points
+                const idx = delaunay.find(wx, wy);
+                if (idx !== -1) {
+                    const targets = [idx, ...voronoi.neighbors(idx)];
+                    let modified = false;
+
+                    for(let t of targets) {
+                        // Check exact distance to cursor
+                        const dx = points[t].x - wx;
+                        const dy = points[t].y - wy;
+                        
+                        if (dx*dx + dy*dy < radiusSq) {
+                            points[t].x += (Math.random() - 0.5) * strength;
+                            points[t].y += (Math.random() - 0.5) * strength;
+                            
+                            // Clamp to world
+                            points[t].x = Math.max(0.1, Math.min(worldWidth - 0.1, points[t].x));
+                            points[t].y = Math.max(0.1, Math.min(worldHeight - 0.1, points[t].y));
+                            
+                            modified = true;
+                        }
+                    }
+
+                    if (modified) {
+                        recomputeGeometry(); // Rebuild structure as positions changed
+                        geometryDirty = true;
+                    }
                 }
             }
         }
@@ -344,7 +384,6 @@
             const rows = Math.ceil(worldHeight / spacing);
             const cols = Math.ceil(worldWidth / spacing);
 
-            // Pre-allocate for speed? JS engine handles push fine usually
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
                     let wx = x * spacing + (spacing/2);

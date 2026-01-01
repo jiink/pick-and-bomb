@@ -36,5 +36,5 @@ public:
     bool IsInitialized() const;
     const std::vector<Cell>& GetAllCells() const { return _cells; }
     void Clear();
-    void AddRawCell(const Cell& cell);
+    bool AddRawCell(const Cell& cell);
 };

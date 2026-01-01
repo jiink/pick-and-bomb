@@ -9,26 +9,27 @@
 #include <optional>
 #include <algorithm>
 #include "pabClient.h"
+#include <string>
 
 namespace {
-    GameState gGameState;
-    std::deque<Snapshot> gSnapshotBuffer;
-    PlayerBindings gInputBindings;
-    PlayerInputState gInputs;
+    GameState _gameState;
+    std::deque<Snapshot> _snapshotBuffer;
+    PlayerBindings _inputBindings;
+    PlayerInputState _inputs;
     Camera2D camera = Camera2D {
         .offset = Vector2 {640/2, 480/2},
         .target = Vector2 {0, 0},
         .rotation = 0,
         .zoom = 50.0f
     };
-    std::deque<std::vector<uint8_t>> gNetPacketsToSend;
-    uint32_t gTickNum = 0;
-    uint8_t gMyPlayerId = 0;
+    std::deque<std::vector<uint8_t>> _netPacketsToSend;
+    uint32_t _tickNum = 0;
+    uint8_t _myPlayerId = 0;
     const size_t MAX_PACKET_SIZE = 1000;
     const size_t MAX_PACKET_COUNT = 100;
     const float INTERPOLATION_OFFSET_S = 0.1f;
-    float gClientTimeS = 0.0f;
-    bool gFirstSnapshotReceived = false;
+    float _clientTimeS = 0.0f;
+    bool _firstSnapshotReceived = false;
 
     const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
         for (const auto& p : snap.players) {
@@ -67,84 +68,102 @@ namespace {
                 packet.size(), MAX_PACKET_SIZE);
             return;
         }
-        if (gNetPacketsToSend.size() > MAX_PACKET_COUNT) {
+        if (_netPacketsToSend.size() > MAX_PACKET_COUNT) {
             PAB_ERR("Too many packets this tick (%d > %d)",
-                gNetPacketsToSend.size(), MAX_PACKET_COUNT);
+                _netPacketsToSend.size(), MAX_PACKET_COUNT);
             return;
         }
-        gNetPacketsToSend.push_back(std::move(packet));
+        _netPacketsToSend.push_back(std::move(packet));
     }
 
     void NetSendInputs(const PlayerInputState& inputs) {
         PacketBuilder pb;
         pb.buffer.reserve(sizeof(PlayerInputState));
         pb << (uint8_t)Command::INPUTS
-            << gTickNum
+            << _tickNum
             << inputs.playerId << inputs.direction.x << inputs.direction.y
             << inputs.attack << inputs.attackPressed << inputs.attackReleased
             << inputs.wepSelectPressed << inputs.leftPressed << inputs.rightPressed;
         NetAddPacket(std::move(pb.buffer));
     }
+
+    void DebugPlayfield(Playfield& pf) {
+        std::string debugStr;
+        for (int y = 0; y < 50; y++) {
+            for (int x = 0; x < 50; x++) {
+                Vector2 samplePt = Vector2 {(float)x, (float)y};
+                Cell* cell = pf.GetCellAtWorldPos(samplePt);
+                if (cell == nullptr) {
+                    debugStr += 'X';
+                } else {
+                    int cellTypeAsInt = (int)(cell->type);
+                    debugStr += std::to_string(cellTypeAsInt);
+                }
+            }
+            debugStr += '\n';
+        }
+        PAB_INFO("%s", debugStr.c_str());
+    }
 }
 
 namespace pab::client {
     std::optional<std::vector<uint8_t>> ConsumePacketToSend() {
-        if (gNetPacketsToSend.empty()) {
+        if (_netPacketsToSend.empty()) {
             return std::nullopt;
         }
-        std::vector<uint8_t> packet = std::move(gNetPacketsToSend.front());
-        gNetPacketsToSend.pop_front();
+        std::vector<uint8_t> packet = std::move(_netPacketsToSend.front());
+        _netPacketsToSend.pop_front();
         return packet;
     }
 
     void Init() {
-        InitPlayerBindings(gInputBindings, 0);
+        InitPlayerBindings(_inputBindings, 0);
     }
 
     void Tick() {
-        gTickNum++;
-        UpdatePlayerInputState(gInputs, gInputBindings, 0);
-        NetSendInputs(gInputs);
+        _tickNum++;
+        UpdatePlayerInputState(_inputs, _inputBindings, 0);
+        NetSendInputs(_inputs);
     }
 
     void UpdateInterpolation(float dt) {
-        if (gSnapshotBuffer.size() < 2) { return; }
-        float newestServerTimeS = gSnapshotBuffer.back().tick * (1.0f / TICK_HZ);
+        if (_snapshotBuffer.size() < 2) { return; }
+        float newestServerTimeS = _snapshotBuffer.back().tick * (1.0f / TICK_HZ);
         float targetClientTimeS = newestServerTimeS - INTERPOLATION_OFFSET_S;
-        float error = targetClientTimeS - gClientTimeS;
+        float error = targetClientTimeS - _clientTimeS;
         float timescale = 1.0f + (error * 5.0f);
         timescale = std::clamp(timescale, 0.9f, 1.1f);
-        gClientTimeS += dt * timescale;
+        _clientTimeS += dt * timescale;
         // let it be so:
-        // gSnapshotBuffer[0] is the previous tick
-        // gSnapshotBuffer[1] is the next tick (i.e. the new/current tick to interpolate towards)
-        while (gSnapshotBuffer.size() > 2 && 
-            gSnapshotBuffer[1].tick * (1.0f / TICK_HZ) < gClientTimeS)
+        // _snapshotBuffer[0] is the previous tick
+        // _snapshotBuffer[1] is the next tick (i.e. the new/current tick to interpolate towards)
+        while (_snapshotBuffer.size() > 2 && 
+            _snapshotBuffer[1].tick * (1.0f / TICK_HZ) < _clientTimeS)
         {
-                gSnapshotBuffer.pop_front();
+                _snapshotBuffer.pop_front();
         }
-        if (gSnapshotBuffer.size() < 2) { return; }
-        const Snapshot& prev = gSnapshotBuffer[0];
-        const Snapshot& next = gSnapshotBuffer[1];
+        if (_snapshotBuffer.size() < 2) { return; }
+        const Snapshot& prev = _snapshotBuffer[0];
+        const Snapshot& next = _snapshotBuffer[1];
         float prevTimeS = prev.tick * (1.0f / TICK_HZ);
         float nextTimeS = next.tick * (1.0f / TICK_HZ);
         float duration = nextTimeS - prevTimeS;
         float alpha = 0.0f;
         if (duration > 0.0001f) {
-            alpha = (gClientTimeS - prevTimeS) / duration;
+            alpha = (_clientTimeS - prevTimeS) / duration;
         }
         alpha = std::clamp(alpha, 0.0f, 1.0f);
         // Don't show players that aren't in the snapshot
-        for (auto& [id, player] : gGameState.players) {
+        for (auto& [id, player] : _gameState.players) {
             player.renderable = false;
         }
         // Update players that are in the new snapshot
         for (const SnapshotPlayer& nextP : next.players) {
-            if (!gGameState.players.contains(nextP.id)) {
+            if (!_gameState.players.contains(nextP.id)) {
                 PAB_ERR("Got snapshot for player %d out of nowhere", nextP.id);
                 continue;
             }
-            Player& visualP = gGameState.players[nextP.id];
+            Player& visualP = _gameState.players[nextP.id];
             visualP.renderable = true;
             visualP.id = nextP.id;
             visualP.dead = nextP.dead;
@@ -154,7 +173,7 @@ namespace pab::client {
             } else {
                 visualP.pos = nextP.pos;
             }
-            gGameState.players[visualP.id] = visualP;
+            _gameState.players[visualP.id] = visualP;
         }
     }
 
@@ -162,10 +181,10 @@ namespace pab::client {
         UpdateInterpolation(GetFrameTime());
         BeginMode2D(camera);
             ClearBackground(GRAY);
-            DrawGameState(gGameState);
+            DrawGameState(_gameState);
         EndMode2D();
-        DrawText(TextFormat("great...\n(%.2f, %.2f)", gInputs.direction.x, gInputs.direction.y), 10, 10, 20, BLACK);
-        // Player* myPlayer = GetPlayer(gGameState.players, gMyPlayerId);
+        DrawText(TextFormat("great...\n(%.2f, %.2f)", _inputs.direction.x, _inputs.direction.y), 10, 10, 20, BLACK);
+        // Player* myPlayer = GetPlayer(_gameState.players, _myPlayerId);
         // if (myPlayer) {
         // }
     }
@@ -182,13 +201,13 @@ namespace pab::client {
             pr >> sp.id >> sp.dead >> sp.pos.x >> sp.pos.y;
             newSnap.players.push_back(sp);
         }
-        gSnapshotBuffer.push_back(newSnap);
+        _snapshotBuffer.push_back(newSnap);
         // sort buffer and init logic
-        std::sort(gSnapshotBuffer.begin(), gSnapshotBuffer.end(), 
+        std::sort(_snapshotBuffer.begin(), _snapshotBuffer.end(), 
             [](const Snapshot& a, const Snapshot& b) { return a.tick < b.tick; });
-        if (!gFirstSnapshotReceived) {
-            gFirstSnapshotReceived = true;
-            gClientTimeS = (newSnap.tick * (1.0f / TICK_HZ) - INTERPOLATION_OFFSET_S);
+        if (!_firstSnapshotReceived) {
+            _firstSnapshotReceived = true;
+            _clientTimeS = (newSnap.tick * (1.0f / TICK_HZ) - INTERPOLATION_OFFSET_S);
         }
     }
 
@@ -197,13 +216,15 @@ namespace pab::client {
         Player newP = {};
         pr >> newP.id >> newP.dead >> newP.pos >> newP.hue;
         PAB_INFO("Got info for a new player (id %d)!", newP.id);
-        gGameState.players[newP.id] = newP;
+        _gameState.players[newP.id] = newP;
     }
 
     void NetApplyNewPlayfield(std::vector<uint8_t> data)
     {
         PacketReader pr(data);
-        Playfield pf{};
+        float worldWidth, worldHeight, bucketSize;
+        pr >> worldWidth >> worldHeight >> bucketSize;
+        _gameState.playfield = Playfield(worldWidth, worldHeight, bucketSize);
         uint32_t numCells;
         pr >> numCells;
         for (uint32_t i = 0; i < numCells; i++) {
@@ -211,13 +232,15 @@ namespace pab::client {
             uint8_t cType;
             pr >> c.id >> c.pos >> cType >> c.health;
             c.type = (CellType)cType;
-            // hmm....
+            _gameState.playfield.AddRawCell(c);
         }
+        PAB_INFO("Applied new playfield");
+        DebugPlayfield(_gameState.playfield);
     }
 
     void SetPlayerId(uint8_t id)
     {
-        gMyPlayerId = id;
+        _myPlayerId = id;
         PAB_INFO(">>>> I AM PLAYER id %d", id);
     }
 }

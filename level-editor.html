@@ -1,0 +1,442 @@
+<!-- ai did it -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voronoi Level Editor yay</title>
+    <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
+    <style>
+        :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        
+        h1 { margin: 0 0 20px 0; font-size: 1.5rem; color: #aaa; }
+
+        /* Controls Area */
+        .controls { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 15px; background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .control-group { display: flex; flex-direction: column; gap: 8px; border-right: 1px solid #444; padding-right: 15px; }
+        .control-group:last-child { border-right: none; }
+        
+        label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: bold; }
+        
+        input[type="number"], input[type="text"] { background: #333; border: 1px solid #555; color: white; padding: 6px; border-radius: 4px; font-family: monospace; }
+        
+        button { background: #444; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #555; }
+        button.primary { background: var(--accent); }
+        button.primary:hover { background: #357abd; }
+        button.danger { background: #c62828; }
+        button.danger:hover { background: #d32f2f; }
+
+        /* Palette */
+        .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .p-btn { 
+            padding: 8px 12px; border: 2px solid transparent; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 0.8rem; font-weight: bold; border-radius: 4px;
+            color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+        .p-btn:hover { filter: brightness(1.1); }
+        .p-btn.selected { border-color: white; transform: scale(1.05); box-shadow: 0 0 8px rgba(0,0,0,0.5); z-index: 10; }
+
+        /* Mode Switcher */
+        .mode-switch { display: flex; background: #333; border-radius: 4px; overflow: hidden; }
+        .mode-opt { flex: 1; padding: 8px 12px; cursor: pointer; text-align: center; font-size: 0.9rem; user-select: none; }
+        .mode-opt.active { background: var(--accent); color: white; font-weight: bold; }
+        .mode-opt:not(.active):hover { background: #444; }
+
+        /* Canvas */
+        #canvas-container { position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.5); border: 1px solid #444; overflow: hidden; background: #000; margin-bottom: 20px; }
+        canvas { display: block; cursor: crosshair; }
+        
+        /* Code Output */
+        .output-area { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 5px; }
+        textarea { 
+            width: 100%; height: 300px; background: #111; color: #76ff03; 
+            border: 1px solid #333; font-family: 'Consolas', monospace; font-size: 0.9rem;
+            padding: 15px; border-radius: 4px; resize: vertical; box-sizing: border-box;
+        }
+
+        .row { display: flex; align-items: center; gap: 8px; }
+
+        /* Toast Notification */
+        #toast {
+            visibility: hidden; min-width: 250px; margin-left: -125px;
+            background-color: #333; color: #fff; text-align: center; border-radius: 4px;
+            padding: 16px; position: fixed; z-index: 1; left: 50%; bottom: 30px;
+            font-size: 17px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border-left: 5px solid var(--accent);
+            opacity: 0; transition: opacity 0.3s, bottom 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+    </style>
+</head>
+<body>
+
+    <h1>Voronoi Level Editor</h1>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Dimensions</label>
+            <div class="row">
+                <input type="number" id="worldW" value="50" style="width: 50px"> W
+                <input type="number" id="worldH" value="50" style="width: 50px"> H
+                <button onclick="resizeWorld()">Set</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Tool Mode</label>
+            <div class="mode-switch">
+                <div class="mode-opt active" id="mode-place" onclick="setMode('PLACE')">Place</div>
+                <div class="mode-opt" id="mode-paint" onclick="setMode('PAINT')">Paint</div>
+            </div>
+            <div style="margin-top:5px; font-size: 0.75rem; color:#777; max-width: 140px;">
+                <span id="mode-desc">Click to add points.</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Cell Type</label>
+            <div class="palette" id="palette"></div>
+        </div>
+
+        <div class="control-group">
+            <label>Grid Gen</label>
+            <div class="row">
+                <input type="number" id="gridSpacing" value="8" placeholder="Gap" style="width: 40px" title="Spacing">
+                <input type="range" id="gridOffset" min="0" max="1" step="0.1" value="0.5" style="width: 100px" title="Row Offset">
+                <button onclick="generateGrid()">Gen</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Actions</label>
+            <div class="row">
+                <button class="danger" onclick="clearMap()">Clear</button>
+                <button class="primary" onclick="generateCode()">Get Code</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="output-area">
+        <label>Generated C++ Data</label>
+        <textarea id="code-output" readonly placeholder="Click 'Get Code' to generate C++ data source..."></textarea>
+        <button class="primary" onclick="copyCode()" style="align-self: flex-end;">Copy to Clipboard</button>
+    </div>
+
+    <div id="toast">Copied to clipboard!</div>
+
+    <script>
+        // --- Configuration ---
+        const CELL_TYPES = {
+            AIR:      { id: 0, color: '#A0D8EF', label: 'AIR' },
+            DIRT:     { id: 1, color: '#5D4037', label: 'DIRT' },
+            STONE:    { id: 2, color: '#757575', label: 'STONE' },
+            TREASURE: { id: 3, color: '#FFD700', label: 'LOOT' },
+            WALL:     { id: 4, color: '#212121', label: 'WALL' },
+            DELETE:   { id: -1, color: '#b71c1c', label: 'DEL' } 
+        };
+
+        // --- State ---
+        let points = []; // Array of {x, y, typeId}
+        let worldWidth = 50;
+        let worldHeight = 50;
+        let scale = 10; 
+        
+        let selectedType = CELL_TYPES.DIRT;
+        let currentMode = 'PLACE'; // 'PLACE' or 'PAINT'
+        let isMouseDown = false;
+        
+        // D3 Cache
+        let delaunay = null;
+        let voronoi = null;
+        let shouldRecomputeGeometry = false;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Opt for speed
+
+        // --- Init ---
+        function init() {
+            createPalette();
+            resizeWorld();
+            
+            // Events
+            canvas.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                handleInput(e);
+            });
+            window.addEventListener('mouseup', () => {
+                isMouseDown = false;
+            });
+            canvas.addEventListener('mousemove', (e) => {
+                if(isMouseDown) handleInput(e);
+            });
+            canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent right click menu
+            
+            render();
+        }
+
+        function createPalette() {
+            const container = document.getElementById('palette');
+            for (const [key, type] of Object.entries(CELL_TYPES)) {
+                const btn = document.createElement('div');
+                btn.className = 'p-btn';
+                btn.style.backgroundColor = type.color;
+                
+                // For better contrast on light colors
+                if(key === 'AIR' || key === 'TREASURE') btn.style.color = '#333';
+
+                btn.innerText = type.label;
+                
+                btn.onclick = () => {
+                    document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedType = type;
+                };
+
+                if (key === 'DIRT') btn.classList.add('selected');
+                container.appendChild(btn);
+            }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('mode-place').classList.toggle('active', mode === 'PLACE');
+            document.getElementById('mode-paint').classList.toggle('active', mode === 'PAINT');
+            
+            const desc = document.getElementById('mode-desc');
+            if(mode === 'PLACE') desc.innerText = "Click to add new cells.";
+            else desc.innerText = "Drag to recolor cells.";
+        }
+
+        // --- Logic ---
+
+        function resizeWorld() {
+            worldWidth = parseFloat(document.getElementById('worldW').value);
+            worldHeight = parseFloat(document.getElementById('worldH').value);
+            
+            // Calc scale to fit window width
+            const maxWidth = Math.min(window.innerWidth - 40, 1000); 
+            scale = maxWidth / worldWidth;
+
+            canvas.width = worldWidth * scale;
+            canvas.height = worldHeight * scale;
+            
+            shouldRecomputeGeometry = true;
+            render();
+        }
+
+        function recomputeGeometry() {
+            if (points.length === 0) {
+                delaunay = null;
+                voronoi = null;
+                return;
+            }
+            
+            // Format for D3: [x0, y0, x1, y1...]
+            const coords = new Float64Array(points.length * 2);
+            for(let i=0; i<points.length; i++) {
+                coords[i*2] = points[i].x;
+                coords[i*2+1] = points[i].y;
+            }
+
+            delaunay = new d3.Delaunay(coords);
+            voronoi = delaunay.voronoi([0, 0, worldWidth, worldHeight]);
+            shouldRecomputeGeometry = false;
+        }
+
+        function handleInput(e) {
+            const rect = canvas.getBoundingClientRect();
+            const wx = (e.clientX - rect.left) / scale;
+            const wy = (e.clientY - rect.top) / scale;
+
+            if (wx < 0 || wx > worldWidth || wy < 0 || wy > worldHeight) return;
+
+            // PAINT MODE: Modify existing cells
+            if (currentMode === 'PAINT') {
+                if (!delaunay) return;
+                
+                // Find index of closest point efficiently
+                const idx = delaunay.find(wx, wy);
+                
+                if (idx !== -1) {
+                    if (selectedType.id === -1) {
+                        // Special Case: Painting "Delete" removes the cell
+                        points.splice(idx, 1);
+                        shouldRecomputeGeometry = true;
+                    } else if (points[idx].typeId !== selectedType.id) {
+                        // Change type
+                        points[idx].typeId = selectedType.id;
+                        // No geometry change needed, just redraw
+                    }
+                    render();
+                }
+                return;
+            }
+
+            // PLACE MODE: Add new cells
+            if (currentMode === 'PLACE') {
+                // Prevent dragging from adding 1000 points in one spot
+                // Only add if mouse was just pressed, or if we moved significantly
+                // Simple implementation: Just on click (handled by isMouseDown logic? No, let's limit density)
+                
+                // Check distance to nearest existing point to avoid stacking
+                let tooClose = false;
+                if(delaunay) {
+                    const idx = delaunay.find(wx, wy);
+                    if(idx !== -1) {
+                        const dx = points[idx].x - wx;
+                        const dy = points[idx].y - wy;
+                        if ((dx*dx + dy*dy) < 0.5) tooClose = true; // Minimum distance threshold
+                    }
+                }
+
+                if (!tooClose) {
+                    if(selectedType.id === -1) {
+                        // Delete logic in Place mode (click to delete)
+                         if(delaunay) {
+                            const idx = delaunay.find(wx, wy);
+                            points.splice(idx, 1);
+                         }
+                    } else {
+                        points.push({ x: wx, y: wy, typeId: selectedType.id });
+                    }
+                    shouldRecomputeGeometry = true;
+                    render();
+                }
+            }
+        }
+
+        function generateGrid() {
+            const spacing = parseFloat(document.getElementById('gridSpacing').value);
+            const offsetRatio = parseFloat(document.getElementById('gridOffset').value);
+            
+            if (spacing <= 0) return;
+
+            // Clear existing? Optional. Let's append for flexibility, user can Clear first.
+            
+            const rows = Math.ceil(worldHeight / spacing);
+            const cols = Math.ceil(worldWidth / spacing);
+
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    let wx = x * spacing + (spacing/2);
+                    let wy = y * spacing + (spacing/2);
+
+                    if (y % 2 !== 0) {
+                        wx += spacing * offsetRatio;
+                    }
+
+                    // Only add if inside bounds
+                    if (wx > 0 && wx < worldWidth && wy > 0 && wy < worldHeight) {
+                        points.push({ x: wx, y: wy, typeId: selectedType.id });
+                    }
+                }
+            }
+            shouldRecomputeGeometry = true;
+            render();
+        }
+
+        function clearMap() {
+            if(confirm("Are you sure you want to clear all cells?")) {
+                points = [];
+                shouldRecomputeGeometry = true;
+                render();
+            }
+        }
+
+        // --- Rendering ---
+        function render() {
+            if (shouldRecomputeGeometry) {
+                recomputeGeometry();
+            }
+
+            // Background
+            ctx.fillStyle = "#111";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!voronoi) return;
+
+            ctx.save();
+            ctx.scale(scale, scale);
+            ctx.lineWidth = 1/scale; // Keep lines thin
+
+            // 1. Draw Cells
+            for (let i = 0; i < points.length; i++) {
+                ctx.beginPath();
+                voronoi.renderCell(i, ctx);
+                
+                const typeId = points[i].typeId;
+                let color = '#fff';
+                for(let k in CELL_TYPES) {
+                    if(CELL_TYPES[k].id === typeId) color = CELL_TYPES[k].color;
+                }
+                
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.stroke();
+            }
+
+            // 2. Draw Dots (Seeds) for visual reference
+            ctx.fillStyle = "rgba(0,0,0,0.2)";
+            for (let i = 0; i < points.length; i++) {
+                ctx.beginPath();
+                ctx.arc(points[i].x, points[i].y, 0.1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // --- Code Gen ---
+        function generateCode() {
+            // Find CellType enum names map
+            const idToName = {};
+            for(let k in CELL_TYPES) {
+                if(CELL_TYPES[k].id !== -1) idToName[CELL_TYPES[k].id] = k;
+            }
+
+            let output = `// Level Dimensions: ${worldWidth} x ${worldHeight}\n`;
+            output += `// struct LevelCellDef { float x; float y; CellType t; };\n\n`;
+            
+            output += `static const std::vector<LevelCellDef> levelData = {\n`;
+            
+            // Use a string buffer for speed
+            const lines = points.map(p => {
+                const tName = idToName[p.typeId] || "AIR";
+                return `    { ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, CellType::${tName} }`;
+            });
+            
+            output += lines.join(",\n");
+            output += `\n};\n`;
+
+            document.getElementById('code-output').value = output;
+        }
+
+        function copyCode() {
+            const copyText = document.getElementById("code-output");
+            if (!copyText.value) return;
+            
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); 
+            navigator.clipboard.writeText(copyText.value).then(() => {
+                showToast();
+            });
+        }
+
+        function showToast() {
+            const x = document.getElementById("toast");
+            x.className = "show";
+            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>

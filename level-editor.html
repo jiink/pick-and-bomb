@@ -27,6 +27,8 @@
         button.primary:hover { background: #357abd; }
         button.danger { background: #c62828; }
         button.danger:hover { background: #d32f2f; }
+        button.warning { background: #f57f17; color: #fff; } /* Added for Undo */
+        button.warning:hover { background: #ffb04c; }
 
         /* Palette */
         .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -113,6 +115,7 @@
         <div class="control-group">
             <label>Actions</label>
             <div class="row">
+                <button class="warning" onclick="undo()" title="Ctrl+Z">Undo</button>
                 <button class="danger" onclick="clearMap()">Clear</button>
                 <button class="primary" onclick="generateCode()">Get Code</button>
             </div>
@@ -144,6 +147,7 @@
 
         // --- State ---
         let points = []; // Array of {x, y, typeId}
+        let historyStack = []; // History for Undo
         let worldWidth = 50;
         let worldHeight = 50;
         let scale = 10; 
@@ -167,6 +171,8 @@
             
             // Events
             canvas.addEventListener('mousedown', (e) => {
+                // Save state before mouse interaction starts
+                saveState();
                 isMouseDown = true;
                 handleInput(e);
             });
@@ -178,6 +184,14 @@
             });
             canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent right click menu
             
+            // Undo Keyboard Shortcut
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                    e.preventDefault();
+                    undo();
+                }
+            });
+
             render();
         }
 
@@ -212,6 +226,23 @@
             const desc = document.getElementById('mode-desc');
             if(mode === 'PLACE') desc.innerText = "Click to add new cells.";
             else desc.innerText = "Drag to recolor cells.";
+        }
+
+        // --- Undo Logic ---
+
+        function saveState() {
+            // Keep last 30 states
+            if (historyStack.length > 30) historyStack.shift();
+            // Deep copy the points array
+            historyStack.push(JSON.parse(JSON.stringify(points)));
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            
+            points = historyStack.pop();
+            shouldRecomputeGeometry = true;
+            render();
         }
 
         // --- Logic ---
@@ -281,10 +312,6 @@
 
             // PLACE MODE: Add new cells
             if (currentMode === 'PLACE') {
-                // Prevent dragging from adding 1000 points in one spot
-                // Only add if mouse was just pressed, or if we moved significantly
-                // Simple implementation: Just on click (handled by isMouseDown logic? No, let's limit density)
-                
                 // Check distance to nearest existing point to avoid stacking
                 let tooClose = false;
                 if(delaunay) {
@@ -313,12 +340,12 @@
         }
 
         function generateGrid() {
+            saveState(); // Save before generating
+            
             const spacing = parseFloat(document.getElementById('gridSpacing').value);
             const offsetRatio = parseFloat(document.getElementById('gridOffset').value);
             
             if (spacing <= 0) return;
-
-            // Clear existing? Optional. Let's append for flexibility, user can Clear first.
             
             const rows = Math.ceil(worldHeight / spacing);
             const cols = Math.ceil(worldWidth / spacing);
@@ -344,6 +371,7 @@
 
         function clearMap() {
             if(confirm("Are you sure you want to clear all cells?")) {
+                saveState(); // Save before clearing
                 points = [];
                 shouldRecomputeGeometry = true;
                 render();

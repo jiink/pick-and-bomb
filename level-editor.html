@@ -1,35 +1,28 @@
-<!-- ai did it -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voronoi Level Editor yay</title>
+    <title>Voronoi Level Editor Optimized</title>
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
     <style>
         :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        
         h1 { margin: 0 0 20px 0; font-size: 1.5rem; color: #aaa; }
-
         /* Controls Area */
         .controls { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 15px; background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .control-group { display: flex; flex-direction: column; gap: 8px; border-right: 1px solid #444; padding-right: 15px; }
         .control-group:last-child { border-right: none; }
-        
         label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: bold; }
-        
         input[type="number"], input[type="text"] { background: #333; border: 1px solid #555; color: white; padding: 6px; border-radius: 4px; font-family: monospace; }
-        
         button { background: #444; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s; }
         button:hover { background: #555; }
         button.primary { background: var(--accent); }
         button.primary:hover { background: #357abd; }
         button.danger { background: #c62828; }
         button.danger:hover { background: #d32f2f; }
-        button.warning { background: #f57f17; color: #fff; } /* Added for Undo */
+        button.warning { background: #f57f17; color: #fff; }
         button.warning:hover { background: #ffb04c; }
-
         /* Palette */
         .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
         .p-btn { 
@@ -41,17 +34,14 @@
         }
         .p-btn:hover { filter: brightness(1.1); }
         .p-btn.selected { border-color: white; transform: scale(1.05); box-shadow: 0 0 8px rgba(0,0,0,0.5); z-index: 10; }
-
         /* Mode Switcher */
         .mode-switch { display: flex; background: #333; border-radius: 4px; overflow: hidden; }
         .mode-opt { flex: 1; padding: 8px 12px; cursor: pointer; text-align: center; font-size: 0.9rem; user-select: none; }
         .mode-opt.active { background: var(--accent); color: white; font-weight: bold; }
         .mode-opt:not(.active):hover { background: #444; }
-
         /* Canvas */
         #canvas-container { position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.5); border: 1px solid #444; overflow: hidden; background: #000; margin-bottom: 20px; }
         canvas { display: block; cursor: crosshair; }
-        
         /* Code Output */
         .output-area { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 5px; }
         textarea { 
@@ -59,9 +49,7 @@
             border: 1px solid #333; font-family: 'Consolas', monospace; font-size: 0.9rem;
             padding: 15px; border-radius: 4px; resize: vertical; box-sizing: border-box;
         }
-
         .row { display: flex; align-items: center; gap: 8px; }
-
         /* Toast Notification */
         #toast {
             visibility: hidden; min-width: 250px; margin-left: -125px;
@@ -75,14 +63,14 @@
 </head>
 <body>
 
-    <h1>Voronoi Level Editor</h1>
+    <h1>Voronoi Editor (Optimized)</h1>
 
     <div class="controls">
         <div class="control-group">
             <label>Dimensions</label>
             <div class="row">
-                <input type="number" id="worldW" value="50" style="width: 50px"> W
-                <input type="number" id="worldH" value="50" style="width: 50px"> H
+                <input type="number" id="worldW" value="64" style="width: 50px"> W
+                <input type="number" id="worldH" value="64" style="width: 50px"> H
                 <button onclick="resizeWorld()">Set</button>
             </div>
         </div>
@@ -106,7 +94,7 @@
         <div class="control-group">
             <label>Grid Gen</label>
             <div class="row">
-                <input type="number" id="gridSpacing" value="8" placeholder="Gap" style="width: 40px" title="Spacing">
+                <input type="number" id="gridSpacing" value="2" placeholder="Gap" style="width: 40px" title="Spacing">
                 <input type="range" id="gridOffset" min="0" max="1" step="0.1" value="0.5" style="width: 100px" title="Row Offset">
                 <button onclick="generateGrid()">Gen</button>
             </div>
@@ -146,45 +134,52 @@
         };
 
         // --- State ---
-        let points = []; // Array of {x, y, typeId}
-        let historyStack = []; // History for Undo
-        let worldWidth = 50;
-        let worldHeight = 50;
+        let points = []; 
+        let historyStack = []; 
+        let worldWidth = 64;
+        let worldHeight = 64;
         let scale = 10; 
         
         let selectedType = CELL_TYPES.DIRT;
-        let currentMode = 'PLACE'; // 'PLACE' or 'PAINT'
+        let currentMode = 'PLACE'; 
         let isMouseDown = false;
+
+        // Mouse State for Interpolation
+        let lastMouseX = null;
+        let lastMouseY = null;
         
         // D3 Cache
         let delaunay = null;
         let voronoi = null;
-        let shouldRecomputeGeometry = false;
+        
+        // Render Flags
+        let geometryDirty = false; // Structure changed (add/remove) - needs full redraw
+        let paintDirtyIdx = new Set(); // Only colors changed - fast partial redraw
 
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false }); // Opt for speed
+        const ctx = canvas.getContext('2d', { alpha: false });
 
         // --- Init ---
         function init() {
             createPalette();
             resizeWorld();
             
-            // Events
             canvas.addEventListener('mousedown', (e) => {
-                // Save state before mouse interaction starts
                 saveState();
                 isMouseDown = true;
-                handleInput(e);
+                updateMousePos(e);
+                processInput(e);
             });
             window.addEventListener('mouseup', () => {
                 isMouseDown = false;
+                lastMouseX = null;
+                lastMouseY = null;
             });
             canvas.addEventListener('mousemove', (e) => {
-                if(isMouseDown) handleInput(e);
+                if(isMouseDown) processInput(e);
             });
-            canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent right click menu
+            canvas.addEventListener('contextmenu', (e) => e.preventDefault());
             
-            // Undo Keyboard Shortcut
             window.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
                     e.preventDefault();
@@ -192,7 +187,8 @@
                 }
             });
 
-            render();
+            // Start Render Loop
+            requestAnimationFrame(renderLoop);
         }
 
         function createPalette() {
@@ -201,18 +197,13 @@
                 const btn = document.createElement('div');
                 btn.className = 'p-btn';
                 btn.style.backgroundColor = type.color;
-                
-                // For better contrast on light colors
                 if(key === 'AIR' || key === 'TREASURE') btn.style.color = '#333';
-
                 btn.innerText = type.label;
-                
                 btn.onclick = () => {
                     document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('selected'));
                     btn.classList.add('selected');
                     selectedType = type;
                 };
-
                 if (key === 'DIRT') btn.classList.add('selected');
                 container.appendChild(btn);
             }
@@ -222,44 +213,37 @@
             currentMode = mode;
             document.getElementById('mode-place').classList.toggle('active', mode === 'PLACE');
             document.getElementById('mode-paint').classList.toggle('active', mode === 'PAINT');
-            
-            const desc = document.getElementById('mode-desc');
-            if(mode === 'PLACE') desc.innerText = "Click to add new cells.";
-            else desc.innerText = "Drag to recolor cells.";
+            document.getElementById('mode-desc').innerText = mode === 'PLACE' ? "Click/Drag to add cells." : "Drag to recolor cells.";
+        }
+
+        function updateMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            lastMouseX = (e.clientX - rect.left) / scale;
+            lastMouseY = (e.clientY - rect.top) / scale;
         }
 
         // --- Undo Logic ---
-
         function saveState() {
-            // Keep last 30 states
             if (historyStack.length > 30) historyStack.shift();
-            // Deep copy the points array
-            historyStack.push(JSON.parse(JSON.stringify(points)));
+            // Clone simple array of objects
+            historyStack.push(points.map(p => ({...p})));
         }
 
         function undo() {
             if (historyStack.length === 0) return;
-            
             points = historyStack.pop();
-            shouldRecomputeGeometry = true;
-            render();
+            geometryDirty = true;
         }
 
         // --- Logic ---
-
         function resizeWorld() {
             worldWidth = parseFloat(document.getElementById('worldW').value);
             worldHeight = parseFloat(document.getElementById('worldH').value);
-            
-            // Calc scale to fit window width
             const maxWidth = Math.min(window.innerWidth - 40, 1000); 
             scale = maxWidth / worldWidth;
-
             canvas.width = worldWidth * scale;
             canvas.height = worldHeight * scale;
-            
-            shouldRecomputeGeometry = true;
-            render();
+            geometryDirty = true;
         }
 
         function recomputeGeometry() {
@@ -268,121 +252,164 @@
                 voronoi = null;
                 return;
             }
-            
-            // Format for D3: [x0, y0, x1, y1...]
             const coords = new Float64Array(points.length * 2);
             for(let i=0; i<points.length; i++) {
                 coords[i*2] = points[i].x;
                 coords[i*2+1] = points[i].y;
             }
-
             delaunay = new d3.Delaunay(coords);
             voronoi = delaunay.voronoi([0, 0, worldWidth, worldHeight]);
-            shouldRecomputeGeometry = false;
         }
 
-        function handleInput(e) {
+        // --- Optimized Input Handling ---
+        function processInput(e) {
             const rect = canvas.getBoundingClientRect();
-            const wx = (e.clientX - rect.left) / scale;
-            const wy = (e.clientY - rect.top) / scale;
+            const currX = (e.clientX - rect.left) / scale;
+            const currY = (e.clientY - rect.top) / scale;
 
-            if (wx < 0 || wx > worldWidth || wy < 0 || wy > worldHeight) return;
+            if (currX < 0 || currX > worldWidth || currY < 0 || currY > worldHeight) return;
 
-            // PAINT MODE: Modify existing cells
+            // Initialize last pos if null
+            if (lastMouseX === null) { lastMouseX = currX; lastMouseY = currY; }
+
+            // OPTIMIZATION: Interpolate between last mouse position and current
+            // This prevents "sprinkling dots" when moving mouse fast
+            const dist = Math.hypot(currX - lastMouseX, currY - lastMouseY);
+            // Step size roughly half a unit to catch all cells
+            const step = 0.5; 
+            const steps = Math.ceil(dist / step);
+
+            for (let i = 0; i <= steps; i++) {
+                const t = steps === 0 ? 0 : i / steps;
+                const wx = lastMouseX + (currX - lastMouseX) * t;
+                const wy = lastMouseY + (currY - lastMouseY) * t;
+                applyToolAt(wx, wy);
+            }
+
+            lastMouseX = currX;
+            lastMouseY = currY;
+        }
+
+        function applyToolAt(wx, wy) {
+            // PAINT MODE
             if (currentMode === 'PAINT') {
                 if (!delaunay) return;
-                
-                // Find index of closest point efficiently
-                const idx = delaunay.find(wx, wy);
+                const idx = delaunay.find(wx, wy); // Very fast
                 
                 if (idx !== -1) {
                     if (selectedType.id === -1) {
-                        // Special Case: Painting "Delete" removes the cell
+                        // Delete requires geometry rebuild
                         points.splice(idx, 1);
-                        shouldRecomputeGeometry = true;
+                        // If we delete, we must rebuild delaunay immediately for next step
+                        // (Can be optimized further, but acceptable for delete)
+                        recomputeGeometry(); 
+                        geometryDirty = true;
                     } else if (points[idx].typeId !== selectedType.id) {
-                        // Change type
+                        // Just a color change
                         points[idx].typeId = selectedType.id;
-                        // No geometry change needed, just redraw
+                        paintDirtyIdx.add(idx); // Mark for partial render
                     }
-                    render();
                 }
                 return;
             }
 
-            // PLACE MODE: Add new cells
+            // PLACE MODE
             if (currentMode === 'PLACE') {
-                // Check distance to nearest existing point to avoid stacking
+                // Check density to prevent infinite stacking
                 let tooClose = false;
                 if(delaunay) {
                     const idx = delaunay.find(wx, wy);
                     if(idx !== -1) {
                         const dx = points[idx].x - wx;
                         const dy = points[idx].y - wy;
-                        if ((dx*dx + dy*dy) < 0.5) tooClose = true; // Minimum distance threshold
+                        if ((dx*dx + dy*dy) < 0.25) tooClose = true; 
                     }
                 }
 
-                if (!tooClose) {
-                    if(selectedType.id === -1) {
-                        // Delete logic in Place mode (click to delete)
-                         if(delaunay) {
-                            const idx = delaunay.find(wx, wy);
-                            points.splice(idx, 1);
-                         }
-                    } else {
-                        points.push({ x: wx, y: wy, typeId: selectedType.id });
-                    }
-                    shouldRecomputeGeometry = true;
-                    render();
+                if (!tooClose && selectedType.id !== -1) {
+                    points.push({ x: wx, y: wy, typeId: selectedType.id });
+                    // Quick recompute needed for next insertion check
+                    recomputeGeometry();
+                    geometryDirty = true;
                 }
             }
         }
 
         function generateGrid() {
-            saveState(); // Save before generating
-            
+            saveState();
             const spacing = parseFloat(document.getElementById('gridSpacing').value);
             const offsetRatio = parseFloat(document.getElementById('gridOffset').value);
-            
             if (spacing <= 0) return;
             
             const rows = Math.ceil(worldHeight / spacing);
             const cols = Math.ceil(worldWidth / spacing);
 
+            // Pre-allocate for speed? JS engine handles push fine usually
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
                     let wx = x * spacing + (spacing/2);
                     let wy = y * spacing + (spacing/2);
-
-                    if (y % 2 !== 0) {
-                        wx += spacing * offsetRatio;
-                    }
-
-                    // Only add if inside bounds
+                    if (y % 2 !== 0) wx += spacing * offsetRatio;
+                    
                     if (wx > 0 && wx < worldWidth && wy > 0 && wy < worldHeight) {
                         points.push({ x: wx, y: wy, typeId: selectedType.id });
                     }
                 }
             }
-            shouldRecomputeGeometry = true;
-            render();
+            geometryDirty = true;
         }
 
         function clearMap() {
-            if(confirm("Are you sure you want to clear all cells?")) {
-                saveState(); // Save before clearing
+            if(confirm("Clear all?")) {
+                saveState();
                 points = [];
-                shouldRecomputeGeometry = true;
-                render();
+                geometryDirty = true;
             }
         }
 
-        // --- Rendering ---
-        function render() {
-            if (shouldRecomputeGeometry) {
-                recomputeGeometry();
+        // --- Render Loop (Decoupled from Input) ---
+        function renderLoop() {
+            if (geometryDirty) {
+                renderFull();
+                geometryDirty = false;
+                paintDirtyIdx.clear();
+            } else if (paintDirtyIdx.size > 0) {
+                renderPartial();
+                paintDirtyIdx.clear();
             }
+            requestAnimationFrame(renderLoop);
+        }
+
+        // --- Partial Render: Draws ONLY modified cells on top ---
+        function renderPartial() {
+            if (!voronoi) return;
+            ctx.save();
+            ctx.scale(scale, scale);
+            ctx.lineWidth = 1/scale;
+
+            paintDirtyIdx.forEach(i => {
+                ctx.beginPath();
+                voronoi.renderCell(i, ctx);
+                
+                // Lookup color
+                const typeId = points[i].typeId;
+                let color = '#000';
+                for(let k in CELL_TYPES) {
+                    if(CELL_TYPES[k].id === typeId) { color = CELL_TYPES[k].color; break; }
+                }
+
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        // --- Full Render: Optimized Batching ---
+        function renderFull() {
+            recomputeGeometry(); // Ensure geo is fresh
 
             // Background
             ctx.fillStyle = "#111";
@@ -392,50 +419,58 @@
 
             ctx.save();
             ctx.scale(scale, scale);
-            ctx.lineWidth = 1/scale; // Keep lines thin
+            ctx.lineWidth = 1/scale;
 
-            // 1. Draw Cells
-            for (let i = 0; i < points.length; i++) {
-                ctx.beginPath();
-                voronoi.renderCell(i, ctx);
-                
-                const typeId = points[i].typeId;
+            // OPTIMIZATION: Group by Type ID
+            // Instead of 4000 fill calls, we do X fill calls (where X is number of types)
+            const typeGroups = {};
+            for(let i = 0; i < points.length; i++) {
+                const tid = points[i].typeId;
+                if(!typeGroups[tid]) typeGroups[tid] = [];
+                typeGroups[tid].push(i);
+            }
+
+            // Render batches
+            for(let tid in typeGroups) {
+                // Find color
                 let color = '#fff';
                 for(let k in CELL_TYPES) {
-                    if(CELL_TYPES[k].id === typeId) color = CELL_TYPES[k].color;
+                    if(CELL_TYPES[k].id == tid) { color = CELL_TYPES[k].color; break; }
+                }
+
+                ctx.beginPath();
+                const indices = typeGroups[tid];
+                for(let k=0; k<indices.length; k++) {
+                    voronoi.renderCell(indices[k], ctx);
                 }
                 
                 ctx.fillStyle = color;
                 ctx.fill();
+                // Stroke is still expensive but necessary for definition
                 ctx.strokeStyle = '#000';
-                ctx.stroke();
+                ctx.stroke(); 
             }
 
-            // 2. Draw Dots (Seeds) for visual reference
+            // Draw Seeds (optional, low cost)
             ctx.fillStyle = "rgba(0,0,0,0.2)";
+            ctx.beginPath();
             for (let i = 0; i < points.length; i++) {
-                ctx.beginPath();
+                ctx.moveTo(points[i].x + 0.1, points[i].y);
                 ctx.arc(points[i].x, points[i].y, 0.1, 0, Math.PI * 2);
-                ctx.fill();
             }
+            ctx.fill();
 
             ctx.restore();
         }
 
         // --- Code Gen ---
         function generateCode() {
-            // Find CellType enum names map
             const idToName = {};
-            for(let k in CELL_TYPES) {
-                if(CELL_TYPES[k].id !== -1) idToName[CELL_TYPES[k].id] = k;
-            }
+            for(let k in CELL_TYPES) if(CELL_TYPES[k].id !== -1) idToName[CELL_TYPES[k].id] = k;
 
-            let output = `// Level Dimensions: ${worldWidth} x ${worldHeight}\n`;
-            output += `// struct LevelCellDef { float x; float y; CellType t; };\n\n`;
-            
+            let output = `// Level: ${worldWidth} x ${worldHeight} (${points.length} cells)\n`;
             output += `static const std::vector<LevelCellDef> levelData = {\n`;
             
-            // Use a string buffer for speed
             const lines = points.map(p => {
                 const tName = idToName[p.typeId] || "AIR";
                 return `    { ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, CellType::${tName} }`;
@@ -443,28 +478,22 @@
             
             output += lines.join(",\n");
             output += `\n};\n`;
-
             document.getElementById('code-output').value = output;
         }
 
         function copyCode() {
             const copyText = document.getElementById("code-output");
             if (!copyText.value) return;
-            
             copyText.select();
-            copyText.setSelectionRange(0, 99999); 
             navigator.clipboard.writeText(copyText.value).then(() => {
-                showToast();
+                const x = document.getElementById("toast");
+                x.className = "show";
+                setTimeout(() => x.className = x.className.replace("show", ""), 3000);
             });
         }
 
-        function showToast() {
-            const x = document.getElementById("toast");
-            x.className = "show";
-            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
-        }
-
         init();
+        generateGrid(); // Auto gen on load for demo
     </script>
 </body>
 </html>

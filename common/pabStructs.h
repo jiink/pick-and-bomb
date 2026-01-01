@@ -53,6 +53,7 @@ enum class Command {
     INPUTS,
     WELCOME,
     NEW_PLAYER,
+    NEW_PLAYFIELD,
     COMMAND_COUNT
 };
 

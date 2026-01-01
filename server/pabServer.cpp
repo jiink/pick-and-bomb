@@ -75,7 +75,7 @@ namespace {
         newPField.AddCell({41, 41}, CellType::DIRT);
         state.playfield = newPField;
         PAB_INFO("Playfield set up");
-        DebugPlayfield(state.playfield);
+        //DebugPlayfield(state.playfield);
     }
 
     void UpdateGame(
@@ -138,6 +138,47 @@ namespace {
         }
         NetAddPacket(std::move(pb.buffer));
     }
+
+    void NetSendNewPlayer(uint8_t playerId, std::optional<uint8_t> targetId) {
+        Player* newP = GetPlayer(_gameState.players, playerId);
+        if (!newP) {
+            return;
+        }
+        PacketBuilder pb;
+        pb.buffer.reserve(sizeof(Player));
+        pb << (uint8_t)Command::NEW_PLAYER
+            << _tickNum
+            << newP->id
+            << newP->dead
+            << newP->pos
+            << newP->hue;
+        NetAddPacket(std::move(pb.buffer), targetId);
+    }
+
+    void NetSendNewPlayfield(std::optional<uint8_t> targetId) {
+        const Playfield& pf = _gameState.playfield;
+        const std::vector<Cell>& cells = pf.GetAllCells();
+        if (!pf.IsInitialized()) {
+            PAB_ERR("Can't send uninitialized playfield");
+            return;
+        }
+        PacketBuilder pb;
+        size_t estimatedSize = 5 + 4 + (cells.size() * (sizeof(uint16_t) + sizeof(float) * 3 + 1)); 
+        pb.buffer.reserve(estimatedSize);
+        pb << (uint8_t)Command::NEW_PLAYFIELD
+            << _tickNum
+            << pf._worldWidth
+            << pf._worldHeight
+            << pf._bucketSize
+            << (uint32_t)cells.size();
+        for (const auto& cell : cells) {
+            pb << cell.id
+                << cell.pos
+                << (uint8_t)cell.type
+                << cell.health;
+        }
+        NetAddPacket(std::move(pb.buffer), targetId);
+    }
 }
 
 namespace pab::server {
@@ -187,22 +228,6 @@ namespace pab::server {
         return pId;
     }
 
-    void NetSendNewPlayer(uint8_t playerId, std::optional<uint8_t> targetId) {
-        Player* newP = GetPlayer(_gameState.players, playerId);
-        if (!newP) {
-            return;
-        }
-        PacketBuilder pb;
-        pb.buffer.reserve(sizeof(Player));
-        pb << (uint8_t)Command::NEW_PLAYER
-            << _tickNum
-            << newP->id
-            << newP->dead
-            << newP->pos
-            << newP->hue;
-        NetAddPacket(std::move(pb.buffer), targetId);
-    }
-
     void RemovePlayer(uint8_t playerId) {
         if (!_gameState.players.contains(playerId)) {
             PAB_ERR("Tried to remove nonexistant player id %d", playerId);
@@ -233,6 +258,7 @@ namespace pab::server {
             if (existingId == newId) { continue; }
             NetSendNewPlayer(existingId, newId);
         }
+        NetSendNewPlayfield(newId);
         return newId;
     }
 }

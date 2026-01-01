@@ -7,6 +7,8 @@
 // worldHeight: how many world units tall the playfield is
 // bucketSize: how many world units wide and tall each optimization grid cell is
 Playfield::Playfield(float worldWidth, float worldHeight, float bucketSize) {
+    _worldWidth = worldWidth;
+    _worldHeight = worldHeight;
     _bucketSize = bucketSize;
     _gridW = std::ceilf(worldWidth / _bucketSize);
     _gridH = std::ceilf(worldHeight / _bucketSize);
@@ -23,6 +25,11 @@ bool Playfield::AddCell(Vector2 worldPos, CellType cType)
     cell.id = _cells.size();
     cell.pos = worldPos;
     cell.type = cType;
+    return AddRawCell(cell);
+}
+
+bool Playfield::AddRawCell(const Cell &cell)
+{
     _cells.push_back(cell);
     int bX = (int)(cell.pos.x / _bucketSize);
     int bY = (int)(cell.pos.y / _bucketSize);
@@ -80,10 +87,20 @@ void Playfield::DamageCell(Vector2 worldPos, float damage)
     }
 }
 
-bool Playfield::IsInitialized()
+bool Playfield::IsInitialized() const
 {
     return _gridW > 0 && 
         _gridH > 0 && 
         _cells.size() > 0 && 
         _gridBuckets.size() > 0;
 }
+
+void Playfield::Clear()
+{
+    _cells.clear();
+    for (auto& bucket : _gridBuckets) {
+        bucket.clear();
+    }
+}
+
+

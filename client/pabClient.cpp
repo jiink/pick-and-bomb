@@ -8,6 +8,7 @@
 #include <deque>
 #include <optional>
 #include <algorithm>
+#include "pabClient.h"
 
 namespace {
     GameState gGameState;
@@ -199,7 +200,23 @@ namespace pab::client {
         gGameState.players[newP.id] = newP;
     }
 
-    void SetPlayerId(uint8_t id) {
+    void NetApplyNewPlayfield(std::vector<uint8_t> data)
+    {
+        PacketReader pr(data);
+        Playfield pf{};
+        uint32_t numCells;
+        pr >> numCells;
+        for (uint32_t i = 0; i < numCells; i++) {
+            Cell c{};
+            uint8_t cType;
+            pr >> c.id >> c.pos >> cType >> c.health;
+            c.type = (CellType)cType;
+            // hmm....
+        }
+    }
+
+    void SetPlayerId(uint8_t id)
+    {
         gMyPlayerId = id;
         PAB_INFO(">>>> I AM PLAYER id %d", id);
     }

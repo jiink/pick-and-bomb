@@ -24,12 +24,17 @@ private:
     std::vector<std::vector<int>> _gridBuckets;
     int _gridW = 0;
     int _gridH = 0;
-    float _bucketSize = 0.0f;
 public:
+    float _worldWidth = 0.0f;
+    float _worldHeight = 0.0f;
+    float _bucketSize = 0.0f;
     Playfield(float worldWidth, float worldHeight, float bucketSize);
     Playfield();
     bool AddCell(Vector2 worldPos, CellType cType);
     Cell* GetCellAtWorldPos(Vector2 pos);
     void DamageCell(Vector2 worldPos, float damage);
-    bool IsInitialized();
+    bool IsInitialized() const;
+    const std::vector<Cell>& GetAllCells() const { return _cells; }
+    void Clear();
+    void AddRawCell(const Cell& cell);
 };

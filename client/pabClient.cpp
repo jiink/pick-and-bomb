@@ -9,6 +9,7 @@
 #include <optional>
 #include <algorithm>
 #include "pabClient.h"
+#include "client/playfieldShader.h"
 #include <string>
 
 namespace {
@@ -17,10 +18,10 @@ namespace {
     PlayerBindings _inputBindings;
     PlayerInputState _inputs;
     Camera2D camera = Camera2D {
-        .offset = Vector2 {640/2, 480/2},
+        .offset = Vector2 {10, 10},
         .target = Vector2 {0, 0},
         .rotation = 0,
-        .zoom = 50.0f
+        .zoom = 10.0f
     };
     std::deque<std::vector<uint8_t>> _netPacketsToSend;
     uint32_t _tickNum = 0;
@@ -30,6 +31,8 @@ namespace {
     const float INTERPOLATION_OFFSET_S = 0.1f;
     float _clientTimeS = 0.0f;
     bool _firstSnapshotReceived = false;
+    Shader _playfieldShader;
+    Texture _dummyTex;
 
     const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
         for (const auto& p : snap.players) {
@@ -58,7 +61,18 @@ namespace {
         }
     }
 
+    void DrawPlayfield(const Playfield& playfield) {
+        BeginShaderMode(_playfieldShader);
+        //     DrawRectangle(0, 0, playfield._worldWidth, playfield._worldHeight, WHITE);
+        DrawTexturePro(_dummyTex,
+            Rectangle {0, 0, (float)_dummyTex.width, (float)_dummyTex.height},
+            Rectangle {0, 0, playfield._worldWidth, playfield._worldHeight},
+            Vector2 {0, 0}, 0.0f, WHITE);
+        EndShaderMode();
+        }
+
     void DrawGameState(const GameState& gameState) {
+        DrawPlayfield(gameState.playfield);
         DrawPlayers(gameState.players);
     }
 
@@ -118,6 +132,9 @@ namespace pab::client {
 
     void Init() {
         InitPlayerBindings(_inputBindings, 0);
+        _playfieldShader = LoadShaderFromMemory(0, Shaders::playfield);
+        Image dummyImg = GenImageChecked(16, 16, 1, 1, RED, BLUE);
+        _dummyTex = LoadTextureFromImage(dummyImg);
     }
 
     void Tick() {

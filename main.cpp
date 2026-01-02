@@ -23,12 +23,11 @@ static bool InitENet() {
     return true;
 }
 
-
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "look," << std::endl;
-        std::cerr << "To Host:   " << argv[0] << " -s <port>" << std::endl;
-        std::cerr << "To Join:   " << argv[0] << " -c <ip> <port>" << std::endl;
+        std::cerr << "Usage:" << std::endl;
+        std::cerr << "To Host:   " << argv[0] << " -s [port]" << std::endl;
+        std::cerr << "To Join:   " << argv[0] << " -c [ip] [port]" << std::endl;
         return 1;
     }
 
@@ -36,21 +35,22 @@ int main(int argc, char* argv[]) {
 
     try {
         if (mode == "-s") {
-            if (argc < 3) {
-                std::cerr << "Error: Server mode requires a port number." << std::endl;
-                return 1;
+            int port = 6789;
+            if (argc >= 3) {
+                port = std::stoi(argv[2]);
             }
-            int port = std::stoi(argv[2]);
             if (!InitENet()) { return 2; }
             RunServer(port);
         } 
         else if (mode == "-c") {
-            if (argc < 4) {
-                std::cerr << "Error: Client mode requires an IP address and a port." << std::endl;
-                return 1;
+            std::string ip = "127.0.0.1";
+            int port = 6789;
+            if (argc >= 3) {
+                ip = argv[2];
             }
-            std::string ip = argv[2];
-            int port = std::stoi(argv[3]);
+            if (argc >= 4) {
+                port = std::stoi(argv[3]);
+            }
             if (!InitENet()) { return 2; }
             RunClient(ip, port);
         } 
@@ -65,4 +65,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-

@@ -54,6 +54,7 @@ enum class Command {
     WELCOME,
     NEW_PLAYER,
     NEW_PLAYFIELD,
+    DIRTY_CELLS,
     COMMAND_COUNT
 };
 

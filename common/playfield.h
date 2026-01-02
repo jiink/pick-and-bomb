@@ -23,6 +23,7 @@ struct Cell {
     Vector2 pos;
     CellType type;
     float health;
+    bool isDirty;
 };
 
 // TODO look into using PhysFS to publish the game as a single exe
@@ -33,6 +34,7 @@ private:
     std::vector<std::vector<int>> _gridBuckets;
     int _gridW = 0;
     int _gridH = 0;
+    std::vector<int> _dirtyCellIndices;
 public:
     float _worldWidth = 0.0f;
     float _worldHeight = 0.0f;
@@ -46,6 +48,8 @@ public:
     const std::vector<Cell>& GetAllCells() const { return _cells; }
     void Clear();
     void Reset(float worldWidth, float worldHeight, float bucketSize);
-    bool AddRawCell(const Cell& cell);
+    bool AddRawCell(Cell& cell);
     void PopulateFromLevelData(LevelData lvlDat);
+    std::vector<Cell*> GetAndCleanDirtyCells();
+    bool UpdateCell(uint16_t idx, float hp);
 };

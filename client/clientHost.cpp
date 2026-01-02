@@ -47,6 +47,9 @@ static void ParsePacket(std::vector<uint8_t>& data) {
         case Command::NEW_PLAYFIELD:
             pab::client::NetApplyNewPlayfield(data);
             break;
+        case Command::DIRTY_CELLS:
+            pab::client::NetApplyDirtyCells(data);
+            break;
         default:
             PAB_WARN("Unhandled command %d", cmdId);
             break;

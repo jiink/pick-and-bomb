@@ -23,8 +23,9 @@ bool Playfield::AddCell(Vector2 worldPos, CellType cType)
     return AddRawCell(cell);
 }
 
-bool Playfield::AddRawCell(const Cell &cell)
+bool Playfield::AddRawCell(Cell &cell)
 {
+    cell.health = 100.0f;
     _cells.push_back(cell);
     int bX = (int)(cell.pos.x / _bucketSize);
     int bY = (int)(cell.pos.y / _bucketSize);
@@ -48,6 +49,31 @@ void Playfield::PopulateFromLevelData(LevelData lvlDat)
         }
         AddCell(Vector2{p.x, p.y}, cType);
     }
+}
+
+std::vector<Cell *> Playfield::GetAndCleanDirtyCells()
+{
+    std::vector<Cell*> dirtyCells;
+    dirtyCells.reserve(_dirtyCellIndices.size());
+    for (int idx : _dirtyCellIndices) {
+        Cell& c = _cells[idx];
+        c.isDirty = false;
+        dirtyCells.push_back(&c);
+    }
+    _dirtyCellIndices.clear();
+    return dirtyCells;
+}
+
+bool Playfield::UpdateCell(uint16_t idx, float hp)
+{
+    if (idx >= _cells.size()) {
+        return false;
+    }
+    _cells[idx].health = hp;
+    if (_cells[idx].health <= 0.0f) {
+        _cells[idx].type = CellType::AIR;
+    }
+    return true;
 }
 
 Cell* Playfield::GetCellAtWorldPos(Vector2 pos)
@@ -91,6 +117,10 @@ void Playfield::DamageCell(Vector2 worldPos, float damage)
         if (cell->health <= 0) {
             cell->type = CellType::AIR;
         }
+        if (!cell->isDirty) {
+            cell->isDirty = true;
+            _dirtyCellIndices.push_back(cell->id);
+        }
     }
 }
 
@@ -108,6 +138,7 @@ void Playfield::Clear()
     for (auto& bucket : _gridBuckets) {
         bucket.clear();
     }
+    _dirtyCellIndices.clear();
 }
 
 void Playfield::Reset(float worldWidth, float worldHeight, float bucketSize) {

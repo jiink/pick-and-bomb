@@ -35,7 +35,7 @@ namespace {
     {
         const float speed = 2.0f;
         player.pos = Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
-        //Cell* cell = state.playfield.GetCellAtWorldPos(player.pos);
+        state.playfield.DamageCell(player.pos, 100.0f * dt);
     }
 
     PlayerInputState GetPlayerInputs(const InputState& inputs, int playerId) {
@@ -220,6 +220,30 @@ namespace {
         }
         NetAddPacket(std::move(pb.buffer), targetId);
     }
+
+    void NetSendDirtyCells() {
+        std::vector<Cell*> changes = _gameState.playfield.GetAndCleanDirtyCells();
+        if (changes.size() == 0) {
+            return;
+        }
+        int nulls = 0;
+        PacketBuilder pb;
+        pb.buffer.reserve(changes.size() * sizeof(Cell));
+        pb << (uint8_t)Command::DIRTY_CELLS
+            << _tickNum
+            << (uint32_t)changes.size();
+        for (Cell* c : changes) {
+            if (c) {
+                pb << c->id << c->health;
+            } else {
+                nulls++;
+            }
+        }
+        if (nulls > 0) {
+            PAB_ERR("found %d null cell ptrs", nulls);
+        }
+        NetAddPacket(std::move(pb.buffer));
+    }
 }
 
 namespace pab::server {
@@ -246,6 +270,7 @@ namespace pab::server {
         //PAB_INFO("Tick %d of %d ms (%.1f s)", _tickNum, (int)(dt * 1000), (_tickNum * dt));
         UpdateGame(_gameState, _inputState, dt);
         NetSendSnapshot();
+        NetSendDirtyCells();
     }
 
     // Returns the player id of the new player

@@ -346,6 +346,25 @@ namespace pab::client {
         UpdatePlayfieldTex(_gameState.playfield);
     }
 
+    void NetApplyDirtyCells(std::vector<uint8_t> data) {
+        PacketReader pr(data);
+        uint32_t numDirty;
+        pr >> numDirty;
+        int fails = 0;
+        for (uint32_t i = 0; i < numDirty; i++) {
+            uint16_t cellId;
+            float cellHp;
+            pr >> cellId >> cellHp;
+            if(!_gameState.playfield.UpdateCell(cellId, cellHp)) {
+                fails++;
+            }
+        }
+        //PAB_INFO("applied %d dirty cells", numDirty);
+        if (fails > 0) {
+            PAB_ERR("Failed to update %d dirty cells", fails);
+        }
+    }
+
     void SetPlayerId(uint8_t id)
     {
         _myPlayerId = id;

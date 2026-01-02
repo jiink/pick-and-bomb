@@ -38,6 +38,18 @@ bool Playfield::AddRawCell(const Cell &cell)
     }
 }
 
+void Playfield::PopulateFromLevelData(LevelData lvlDat)
+{
+    Reset(lvlDat.width, lvlDat.height, lvlDat.bucketSize);
+    for (LevelData::Point& p : lvlDat.points) {
+        CellType cType = CellType::AIR;
+        if (p.type < (uint8_t)CellType::MAX_CELL_TYPES) {
+            cType = (CellType)p.type;
+        }
+        AddCell(Vector2{p.x, p.y}, cType);
+    }
+}
+
 Cell* Playfield::GetCellAtWorldPos(Vector2 pos)
 {
     int bX = (int)(pos.x / _bucketSize);

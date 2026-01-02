@@ -10,6 +10,13 @@ enum class CellType {
     MAX_CELL_TYPES
 };
 
+struct LevelData {
+    float width, height, bucketSize;
+    struct Point { float x, y; uint8_t type; };
+    std::vector<Point> points;
+};
+const uint8_t LEVEL_FORMAT_VER = 1;
+
 // Struct to represent a cell in the playfield
 struct Cell {
     uint16_t id;
@@ -17,6 +24,8 @@ struct Cell {
     CellType type;
     float health;
 };
+
+// TODO look into using PhysFS to publish the game as a single exe
 
 class Playfield {
 private:
@@ -38,4 +47,5 @@ public:
     void Clear();
     void Reset(float worldWidth, float worldHeight, float bucketSize);
     bool AddRawCell(const Cell& cell);
+    void PopulateFromLevelData(LevelData lvlDat);
 };

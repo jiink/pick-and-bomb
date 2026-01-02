@@ -6,6 +6,8 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <fstream>
+#include <iostream>
 
 namespace {
     GameState _gameState;
@@ -13,7 +15,7 @@ namespace {
     uint32_t _tickNum = 0;
     uint8_t _nextPlayerId = 0;
     std::deque<OutgoingPacket> _netPacketsToSend;
-    const size_t MAX_PACKET_SIZE = 1000;
+    const size_t MAX_PACKET_SIZE = 10000;
     const size_t MAX_PACKET_COUNT = 100;
 
     Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
@@ -64,16 +66,54 @@ namespace {
         PAB_INFO("%s", debugStr.c_str());
     }
 
+    std::optional<LevelData> LoadLevel(const char* filename) {
+        LevelData level = {0,0,0};
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) {
+            PAB_ERR("File not found\n");
+            return std::nullopt;
+        }
+        uint8_t fileVer;
+        file.read(reinterpret_cast<char*>(&fileVer), 1);
+        if (fileVer != LEVEL_FORMAT_VER) { 
+            PAB_ERR("Version mismatch, expected %d but read %d", LEVEL_FORMAT_VER, fileVer);
+            return std::nullopt; 
+        }
+        uint32_t count = 0;
+        file.read(reinterpret_cast<char*>(&level.width), 4);
+        file.read(reinterpret_cast<char*>(&level.height), 4);
+        file.read(reinterpret_cast<char*>(&level.bucketSize), 4);
+        file.read(reinterpret_cast<char*>(&count), 4);
+        level.points.reserve(count);
+        for(uint32_t i = 0; i < count; i++) {
+            float x, y;
+            uint8_t t;
+            file.read(reinterpret_cast<char*>(&x), 4);
+            file.read(reinterpret_cast<char*>(&y), 4);
+            file.read(reinterpret_cast<char*>(&t), 1);
+            level.points.push_back({x, y, t});
+        }
+        return level;
+    }
+
     void SetupPlayfield(GameState& state) {
-        Playfield newPField = Playfield(50.0f, 50.0f, 10.0f);
-        newPField.AddCell({9, 7}, CellType::DIRT);
-        newPField.AddCell({36, 13}, CellType::STONE);
-        newPField.AddCell({11, 21}, CellType::TREASURE);
-        newPField.AddCell({43, 25}, CellType::WALL);
-        newPField.AddCell({27, 29}, CellType::AIR);
-        newPField.AddCell({17, 37}, CellType::DIRT);
-        newPField.AddCell({41, 41}, CellType::DIRT);
-        state.playfield = newPField;
+        // Playfield newPField = Playfield(50.0f, 50.0f, 10.0f);
+        // newPField.AddCell({9, 7}, CellType::DIRT);
+        // newPField.AddCell({36, 13}, CellType::STONE);
+        // newPField.AddCell({11, 21}, CellType::TREASURE);
+        // newPField.AddCell({43, 25}, CellType::WALL);
+        // newPField.AddCell({27, 29}, CellType::AIR);
+        // newPField.AddCell({17, 37}, CellType::DIRT);
+        // newPField.AddCell({41, 41}, CellType::DIRT);
+        // state.playfield = newPField;
+        const char lvlPath[50] = "tinyLevel.vlvl";
+        auto lvlOpt = LoadLevel(lvlPath);
+        if (!lvlOpt.has_value()) {
+            PAB_ERR("Failed to load level \"%s\"", lvlPath);
+            return;
+        }
+        LevelData lvlDat = *lvlOpt;
+        state.playfield.PopulateFromLevelData(lvlDat);
         PAB_INFO("Playfield set up");
         //DebugPlayfield(state.playfield);
     }

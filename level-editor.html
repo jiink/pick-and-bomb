@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voronoi Level Editor - Auto Buckets</title>
+    <title>Voronoi Level Editor</title>
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
     <style>
         :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
@@ -76,7 +76,7 @@
 </head>
 <body>
 
-    <h1>Voronoi Editor (Auto Bucket Size)</h1>
+    <h1>Voronoi Level Editor</h1>
 
     <div class="controls">
         <div class="control-group">
@@ -141,7 +141,8 @@
             <div class="row">
                 <button class="warning" onclick="undo()" title="Ctrl+Z">Undo</button>
                 <button class="danger" onclick="clearMap()">Clear</button>
-                <button class="primary" onclick="generateCode()">Get Code</button>
+                <button class="primary" onclick="generateCode()">Get Text</button>
+                <button class="primary" style="background:#8e44ad;" onclick="downloadBinary()">Download .vlvl</button>
             </div>
         </div>
     </div>
@@ -658,6 +659,121 @@
             output += `\n};\n`;
             document.getElementById('code-output').value = output;
         }
+
+        function downloadBinary() {
+            if (points.length === 0) {
+                alert("No points to export.");
+                return;
+            }
+
+            const FILE_VERSION = 1;
+
+            // 1. Calculate Bucket Size
+            const totalArea = worldWidth * worldHeight;
+            const densityLength = Math.sqrt(totalArea / points.length);
+            const autoBucketSize = parseFloat((densityLength * 2.0).toFixed(2));
+
+            // 2. Prepare Buffer
+            // Header: 1 byte (Version) + 16 bytes (Meta) + Body: (NumPoints * 9 bytes)
+            const bufferSize = 1 + 16 + (points.length * 9);
+            const buffer = new ArrayBuffer(bufferSize);
+            const view = new DataView(buffer);
+            let offset = 0;
+
+            // 3. Write Header
+            view.setUint8(offset, FILE_VERSION); offset += 1; // Version
+            
+            view.setFloat32(offset, worldWidth, true); offset += 4;
+            view.setFloat32(offset, worldHeight, true); offset += 4;
+            view.setFloat32(offset, autoBucketSize, true); offset += 4;
+            view.setUint32(offset, points.length, true); offset += 4;
+
+            // 4. Write Points
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                view.setFloat32(offset, p.x, true); offset += 4;
+                view.setFloat32(offset, p.y, true); offset += 4;
+                view.setUint8(offset, p.typeId); offset += 1;
+            }
+
+            // 5. Trigger Download
+            const blob = new Blob([buffer], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "level_data.vlvl";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // 6. Generate C++ Loader Code
+            generateLoaderCode(points.length, FILE_VERSION);
+        }
+
+        function generateLoaderCode(count, version) {
+            const code = `// --- C++ BINARY LOADER (Version ${version}) ---
+// Format: [Ver:u8] [W:f] [H:f] [Bucket:f] [Count:u32] + [X:f][Y:f][Type:u8]...
+
+#include <vector>
+#include <fstream>
+#include <iostream>
+
+struct LevelData {
+    float width, height, bucketSize;
+    struct Point { float x, y; uint8_t type; };
+    std::vector<Point> points;
+};
+
+LevelData LoadLevel(const char* filename) {
+    LevelData level = {0,0,0};
+    std::ifstream file(filename, std::ios::binary);
+    
+    if (!file) { std::cerr << "File not found\\n"; return level; }
+
+    // 1. Check Version
+    uint8_t fileVer;
+    file.read(reinterpret_cast<char*>(&fileVer), 1);
+    if (fileVer != ${version}) { 
+        std::cerr << "Version mismatch! Expected ${version}, got " << (int)fileVer << "\\n"; 
+        return level; 
+    }
+
+    // 2. Read Header Data
+    uint32_t count = 0;
+    file.read(reinterpret_cast<char*>(&level.width), 4);
+    file.read(reinterpret_cast<char*>(&level.height), 4);
+    file.read(reinterpret_cast<char*>(&level.bucketSize), 4);
+    file.read(reinterpret_cast<char*>(&count), 4);
+
+    // 3. Read Points
+    level.points.reserve(count);
+    for(uint32_t i = 0; i < count; i++) {
+        float x, y;
+        uint8_t t;
+        // We read fields individually to avoid struct packing/padding issues
+        file.read(reinterpret_cast<char*>(&x), 4);
+        file.read(reinterpret_cast<char*>(&y), 4);
+        file.read(reinterpret_cast<char*>(&t), 1);
+        level.points.push_back({x, y, t});
+    }
+
+    return level;
+}
+
+// Saved ${count} points to 'level_data.vlvl'
+`;
+            document.getElementById('code-output').value = code;
+            
+            const x = document.getElementById("toast");
+            x.innerText = "Binary file downloaded!";
+            x.className = "show";
+            setTimeout(() => { 
+                x.className = x.className.replace("show", ""); 
+                x.innerText = "Copied to clipboard!";
+            }, 3000);
+        }
+
 
         function copyCode() {
             const copyText = document.getElementById("code-output");

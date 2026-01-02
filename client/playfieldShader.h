@@ -95,29 +95,24 @@ void main()
     // 6. Calculate Edge
     float distDiff = d2 - d1;
     
-    // 7. Apply AA
-    // Use the pxScale we calculated at the top. 
-    // This replaces 'fwidth(distDiff)' which was causing the artifacts.
-    // 1.5 is a "softness" factor. 1.0 is sharpest, 2.0 is softer.
     float aaWidth = pxScale * 1.5; 
-    
-    // Ensure we don't divide by zero if zoomed infinitely (unlikely)
     aaWidth = max(aaWidth, 0.0001);
     
+    // 0.0 = We are on the edge line
+    // 1.0 = We are safely inside the cell (past the AA width)
     float edgeFactor = smoothstep(0.0, aaWidth, distDiff);
     
     // 8. Color Mixing
     vec4 color1 = GetColorForCell(id1);
-    
-    // Optional: Darken the neighbor color to make the edge look like a border
-    // or fetch the real color of id2.
     vec4 color2 = GetColorForCell(id2); 
     
-    // If you want a black border between cells:
-    // finalColor = mix(vec4(0,0,0,1), color1, edgeFactor);
+    // --- THE FIX ---
+    // We remap edgeFactor so that at the edge (0.0), we mix 50%.
+    // At the center (1.0), we mix 100% of color1.
+    float blendRatio = 0.5 + (0.5 * edgeFactor);
     
-    // If you want smooth blending between cells:
-    finalColor = mix(color2, color1, edgeFactor);
+    finalColor = mix(color2, color1, blendRatio);
+
 }
 
     )";

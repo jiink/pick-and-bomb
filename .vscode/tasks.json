@@ -15,7 +15,9 @@
                 "command": "C:/raylib/w64devkit/bin/mingw32-make.exe",
                 "args": [
                     "RAYLIB_PATH=C:/raylib/raylib",
-                    "BUILD_MODE=DEBUG"
+                    "BUILD_MODE=DEBUG",
+                    "CXXFLAGS=-fopenmp",
+                    "LDFLAGS=-fopenmp"
                 ],
                 "presentation": {
                     "clear": true

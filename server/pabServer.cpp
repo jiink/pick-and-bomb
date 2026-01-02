@@ -35,6 +35,7 @@ namespace {
     {
         const float speed = 2.0f;
         player.pos = Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
+        //Cell* cell = state.playfield.GetCellAtWorldPos(player.pos);
     }
 
     PlayerInputState GetPlayerInputs(const InputState& inputs, int playerId) {

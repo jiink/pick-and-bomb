@@ -123,6 +123,8 @@ namespace {
         int imH = std::floorf(pf._worldHeight) * pixPerWorldUnit;
         Image pfImage = GenImageColor(imW, imH, BLACK);
         Color* pixels = (Color*)pfImage.data;
+        double startTime = GetTime();
+        #pragma omp parallel for
         for (int y = 0; y < imH; y++) {
             for (int x = 0; x < imW; x++) {
                 Vector2 samplePos = Vector2 {
@@ -139,6 +141,10 @@ namespace {
                 pixels[idx] = pixCol;
             }
         }
+        double endTime = GetTime();
+        int elapsedMs = std::ceil((endTime - startTime) * 1000.0f);
+        PAB_INFO("GenPlayfieldImage took %d ms to take %d samples",
+            elapsedMs, imW * imH);
         return pfImage;
     }
 

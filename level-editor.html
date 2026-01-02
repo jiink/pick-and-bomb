@@ -143,7 +143,9 @@
                 <button class="warning" onclick="undo()" title="Ctrl+Z">Undo</button>
                 <button class="danger" onclick="clearMap()">Clear</button>
                 <button class="primary" onclick="generateCode()">Get Text</button>
-                <button class="primary" style="background:#8e44ad;" onclick="downloadBinary()">Download .vlvl</button>
+                <input type="file" id="fileInput" accept=".vlvl" style="display:none" onchange="importBinary(this)">
+                <button class="primary" style="background:#8e44ad;" onclick="document.getElementById('fileInput').click()">Load .vlvl</button>
+                <button class="primary" style="background:#8e44ad;" onclick="downloadBinary()">Save .vlvl</button>
             </div>
         </div>
     </div>
@@ -745,6 +747,68 @@
             // 6. Generate C++ Loader Code
             generateLoaderCode(points.length, FILE_VERSION);
         }
+
+        function importBinary(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const buffer = e.target.result;
+                    const view = new DataView(buffer);
+                    let offset = 0;
+
+                    // 1. Read Version
+                    const version = view.getUint8(offset); offset += 1;
+                    if (version !== 1) {
+                        alert("Error: Unsupported .vlvl version: " + version);
+                        return;
+                    }
+
+                    // 2. Read Header
+                    const w = view.getFloat32(offset, true); offset += 4;
+                    const h = view.getFloat32(offset, true); offset += 4;
+                    const bucketSize = view.getFloat32(offset, true); offset += 4; // Read but ignore
+                    const count = view.getUint32(offset, true); offset += 4;
+
+                    // 3. Prepare State
+                    saveState(); // Push current state to undo stack
+                    
+                    // Update Inputs
+                    document.getElementById('worldW').value = w;
+                    document.getElementById('worldH').value = h;
+
+                    // 4. Read Points
+                    const newPoints = [];
+                    for(let i = 0; i < count; i++) {
+                        const px = view.getFloat32(offset, true); offset += 4;
+                        const py = view.getFloat32(offset, true); offset += 4;
+                        const type = view.getUint8(offset); offset += 1;
+                        newPoints.push({ x: px, y: py, typeId: type });
+                    }
+
+                    // 5. Apply
+                    points = newPoints;
+                    resizeWorld(); // This updates worldWidth/Height from inputs and resets canvas
+                    
+                    // Reset input so same file can be selected again
+                    input.value = '';
+                    
+                    // Toast
+                    const x = document.getElementById("toast");
+                    x.innerText = `Loaded ${count} cells!`;
+                    x.className = "show";
+                    setTimeout(() => x.className = x.className.replace("show", ""), 3000);
+
+                } catch (err) {
+                    console.error(err);
+                    alert("Failed to parse file. Is it a valid .vlvl?");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
 
         function generateLoaderCode(count, version) {
             const code = `// --- C++ BINARY LOADER (Version ${version}) ---

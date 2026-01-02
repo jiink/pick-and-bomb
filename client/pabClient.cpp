@@ -35,6 +35,7 @@ namespace {
     Texture _playfieldTex;
     Texture _cellPropertyTex;
     int _cellPropertyShaderLoc;
+    int _playfieldShaderMode = 0;
 
     const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
         for (const auto& p : snap.players) {
@@ -206,7 +207,7 @@ namespace {
     }
 
     void UpdatePlayfieldTex(Playfield& pf) {
-        Image newPfImg = GenPlayfieldImage(pf, 16);
+        Image newPfImg = GenPlayfieldImage(pf, 8);
         _playfieldTex = LoadTextureFromImage(newPfImg);
         SetTextureFilter(_playfieldTex, TEXTURE_FILTER_POINT);
         Image cellPImg = GenCellPropertyImage(pf);
@@ -292,7 +293,21 @@ namespace pab::client {
         _tickNum++;
         UpdatePlayerInputState(_inputs, _inputBindings, 0);
         NetSendInputs(_inputs);
-        
+        bool modechanged = false;
+        if (IsKeyDown(KEY_ZERO)) {
+            _playfieldShaderMode = 0;
+            modechanged = true;
+        } else if (IsKeyDown(KEY_ONE)) {
+            _playfieldShaderMode = 1;
+            modechanged = true;
+        } else if (IsKeyDown(KEY_TWO)) {
+            _playfieldShaderMode = 2;
+            modechanged = true;
+        }
+        if (modechanged) {
+            int modeLoc = GetShaderLocation(_playfieldShader, "renderMode");
+            SetShaderValue(_playfieldShader, modeLoc, &_playfieldShaderMode, SHADER_UNIFORM_INT);
+        }
         if (_cellPropertyTex.id > 0) {
             Image cellPImg = GenCellPropertyImage(_gameState.playfield);
             UpdateTexture(_cellPropertyTex, cellPImg.data);

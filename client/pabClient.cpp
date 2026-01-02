@@ -132,9 +132,10 @@ namespace {
         for (int y = 0; y < imH; y++) {
         for (int x = 0; x < imW; x++) {
             Vector2 samplePos = Vector2 {
-                x / (float)pixPerWorldUnit,
-                y / (float)pixPerWorldUnit
-            };
+    (x + 0.5f) / (float)pixPerWorldUnit,
+    (y + 0.5f) / (float)pixPerWorldUnit
+};
+
 
             // We only need the Closest Cell!
             float distSqr = 0;

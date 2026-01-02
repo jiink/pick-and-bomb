@@ -8,119 +8,117 @@ namespace Shaders {
 in vec2 fragTexCoord;
 in vec4 fragColor;
 
-uniform sampler2D texture0;  // R=ID, GB=Vector to Center (Pixels), A=Type
+uniform sampler2D texture0;  // R=ID, GB=Vector (Pixels), A=Type
 uniform vec4 palette[256];
-uniform sampler2D cellProps; // R=HP
+uniform sampler2D cellProps; // R=HP, G=Type
 
 out vec4 finalColor;
 
-// Helper to get Cell Data from a specific ID
-vec4 GetColorForCell(int id, int type) {
-    if (id < 0) return vec4(0.0);
+vec4 GetColorForCell(int id) {
+    if (id < 0) return vec4(0.0); // Invalid
     vec4 props = texelFetch(cellProps, ivec2(id, 0), 0);
     float hp = props.r;
-    if (hp <= 0.0) type = 0; // Dead
+    int type = int(props.g);
+    
+    if (hp <= 0.0) type = 0; 
+    
     vec4 col = palette[clamp(type, 0, 255)];
     return vec4(col.rgb * hp, col.a);
 }
 
 void main()
 {
-    // Texture size info
+    // 1. Get Texture Dimensions
     ivec2 texSize = textureSize(texture0, 0);
     
-    // 1. Calculate the center of the current texel in UV space
-    vec2 texelSize = 1.0 / vec2(texSize);
-    vec2 coordPixels = fragTexCoord * vec2(texSize);
-    vec2 centerPixel = floor(coordPixels) + 0.5;
+    // 2. Calculate Screen-Space Metrics
+    // This tells us: "How many Texture Pixels fit in one Screen Pixel?"
+    // We use this to keep the AA line exactly 1-2 screen pixels wide.
+    // We calculate this ONCE using UVs, which are smooth, so no grid artifacts.
+    vec2 fw = fwidth(fragTexCoord * vec2(texSize));
+    float pxScale = length(fw); // Approximation of zoom level
     
-    // 2. We need to find the 2 closest cells.
-    // We search the 3x3 neighborhood around the current texel.
+    // 3. Setup Integer Coordinates
+    vec2 coordTexPixels = fragTexCoord * vec2(texSize);
+    ivec2 centerTexel = ivec2(floor(coordTexPixels));
     
-    float d1 = 99999.0;
-    float d2 = 99999.0;
+    // 4. Voronoi Search (3x3 Neighbors)
+    float d1 = 1e10; // Infinity
+    float d2 = 1e10;
     int id1 = -1;
     int id2 = -1;
-    int type1 = 0;
     
-    // Loop -1 to +1 in x and y
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             
-            // Sample neighbor
-            vec2 offset = vec2(float(x), float(y));
-            vec2 uv = (centerPixel + offset) * texelSize;
+            ivec2 neighborCoord = centerTexel + ivec2(x, y);
             
-            vec4 data = texture(texture0, uv);
+            // texelFetch is fast and precise (no UV float errors)
+            // It ignores filtering (always GL_NEAREST behavior)
+            vec4 data = texelFetch(texture0, neighborCoord, 0);
             
-            int neighborID = int(round(data.r));
-            vec2 neighborVec = data.gb; // Vector from Center of Neighbor -> Cell Center
+            int nID = int(round(data.r));
+            vec2 nVec = data.gb; // Stored vector: NeighborCenter -> CellCenter
             
-            // Reconstruct the vector from OUR FRAGMENT to that Cell Center.
-            // 1. Vector from Fragment to Center of Neighbor Pixel:
-            vec2 fragToNeighborCenter = (centerPixel + offset) - coordPixels;
+            // Reconstruct Vector: Fragment -> NeighborCenter -> CellCenter
+            // (coordTexPixels - centerTexel) gives sub-pixel offset within current texel
+            // vec2(x, y) moves to the neighbor
+            vec2 fragToNeighbor = vec2(x, y) - (coordTexPixels - vec2(centerTexel));
             
-            // 2. Add the stored vector (Neighbor Center -> Cell Center)
-            vec2 fragToCell = fragToNeighborCenter + neighborVec;
+            // Full vector from Fragment to the actual Voronoi Point
+            vec2 fragToCell = fragToNeighbor + nVec; // +0.5 logic handled in C++ generation? 
+            // Note: If C++ stored vector from PixelCenter, we might need a +0.5 offset here 
+            // depending on exactly how you calculated 'diff' in C++. 
+            // If C++ used: diff = cellPos - samplePos; (where samplePos was center of pixel)
+            // then we are good.
             
             float distSq = dot(fragToCell, fragToCell);
             
-            // Standard Insertion Sort for Top 2
             if (distSq < d1) {
-                // If this is the same cell ID we already found, just update dist
-                if (neighborID != id1) {
+                if (nID != id1) {
                     d2 = d1;
                     id2 = id1;
                 }
                 d1 = distSq;
-                id1 = neighborID;
-                type1 = int(data.a);
-            } else if (distSq < d2 && neighborID != id1) {
+                id1 = nID;
+            } else if (distSq < d2 && nID != id1) {
                 d2 = distSq;
-                id2 = neighborID;
+                id2 = nID;
             }
         }
     }
     
-    // 3. Convert to linear distance for AA calculation
+    // 5. Convert squared distance to linear distance (in Texture Pixels)
     d1 = sqrt(d1);
     d2 = sqrt(d2);
     
-    // 4. Smooth Edge Logic
+    // 6. Calculate Edge
     float distDiff = d2 - d1;
     
-    // fwidth now works perfectly because d1/d2 are mathematically continuous per-pixel
-    float aaWidth = fwidth(distDiff);
-    aaWidth = max(aaWidth, 0.001); 
+    // 7. Apply AA
+    // Use the pxScale we calculated at the top. 
+    // This replaces 'fwidth(distDiff)' which was causing the artifacts.
+    // 1.5 is a "softness" factor. 1.0 is sharpest, 2.0 is softer.
+    float aaWidth = pxScale * 1.5; 
     
-    float edgeFactor = smoothstep(0.0, aaWidth * 1.5, distDiff);
+    // Ensure we don't divide by zero if zoomed infinitely (unlikely)
+    aaWidth = max(aaWidth, 0.0001);
     
-    // 5. Colors
-    vec4 color1 = GetColorForCell(id1, type1);
+    float edgeFactor = smoothstep(0.0, aaWidth, distDiff);
     
-    // We need to look up type/color for ID2. 
-    // Since we didn't save Type2 in the loop for brevity, let's just use palette[0] or look it up.
-    // Ideally, pass Type2 in the loop or look up in cellProps if type is there.
-    // Assuming type is constant per ID:
-    // (Here we cheat and assume neighbor is same type, or look up strictly via ID/Props)
-    // For full correctness, you might want to move Type into cellProps entirely.
-    vec4 color2 = vec4(0.0, 0.0, 0.0, 1.0); // Border color logic
+    // 8. Color Mixing
+    vec4 color1 = GetColorForCell(id1);
     
-    // If you want to blend colors of neighbors:
-    // You would need to fetch props for id2. 
-    // Since id2 came from a neighbor, you can't get its type from 'type1'.
-    // If 'type' is in cellProps (Green channel), use this:
-    if (id2 != -1) {
-        // Fetch type from props
-        vec4 props2 = texelFetch(cellProps, ivec2(id2, 0), 0);
-        float hp2 = props2.r;
-        // Assuming you moved Type to cellProps.g as discussed previously:
-        // int type2 = int(props2.g); 
-        // For now, let's just make the edge black or darken closest color
-         color2 = color1 * 0.5; // Simple border
-    }
-
+    // Optional: Darken the neighbor color to make the edge look like a border
+    // or fetch the real color of id2.
+    vec4 color2 = GetColorForCell(id2); 
+    
+    // If you want a black border between cells:
+    // finalColor = mix(vec4(0,0,0,1), color1, edgeFactor);
+    
+    // If you want smooth blending between cells:
     finalColor = mix(color2, color1, edgeFactor);
 }
+
     )";
 }

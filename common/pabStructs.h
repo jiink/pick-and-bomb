@@ -67,6 +67,8 @@ constexpr std::array<CommandConfig, static_cast<size_t>(Command::COMMAND_COUNT)>
     [static_cast<size_t>(Command::INPUTS)]     = { .isReliable = false },
     [static_cast<size_t>(Command::WELCOME)]    = { .isReliable = true },
     [static_cast<size_t>(Command::NEW_PLAYER)] = { .isReliable = true },
+    [static_cast<size_t>(Command::NEW_PLAYFIELD)] = { .isReliable = true },
+    [static_cast<size_t>(Command::DIRTY_CELLS)] = { .isReliable = false },
 }};
 
 const size_t HEADER_SIZE = 5;

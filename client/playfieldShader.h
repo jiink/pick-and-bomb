@@ -22,12 +22,15 @@ out vec4 finalColor;
 void main()
 {
     vec4 texel = texture(texture0, fragTexCoord);
-    int cellType = int(texel.r);
-    int paletteIdx = clamp(cellType, 0, 255);
-    vec4 cellTypeCol = palette[paletteIdx];
     int cellId = int(texel.g);
     vec4 cellP = texelFetch(cellProps, ivec2(cellId, 0), 0);
     float cellHp = cellP.r;
+    int cellType = int(texel.r);
+    if (cellHp <= 0.0) {
+        cellType = 0;
+    }
+    int paletteIdx = clamp(cellType, 0, 255);
+    vec4 cellTypeCol = palette[paletteIdx];
     vec3 solidColor = cellTypeCol.rgb * cellHp;
     finalColor = vec4(solidColor, cellTypeCol.a);
 }

@@ -235,9 +235,9 @@ namespace pab::client {
                     a = 255;
                     break;
                 case CellType::STONE:
-                    r = 112;
-                    g = 98;
-                    b = 89;
+                    r = 112/2;
+                    g = 98/2;
+                    b = 89/2;
                     a = 255;
                     break;
                 case CellType::TREASURE:
@@ -334,6 +334,18 @@ namespace pab::client {
 
     void Draw() {
         UpdateInterpolation(GetFrameTime());
+        camera.offset = Vector2 { (float)GetScreenWidth() / 2.0f, (float)GetScreenHeight() / 2.0f };
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0) {
+            camera.zoom += wheel * 1.0f; 
+            if (camera.zoom < 1.0f) camera.zoom = 1.0f;
+            if (camera.zoom > 50.0f) camera.zoom = 50.0f;
+        }
+        if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
+            Vector2 delta = GetMouseDelta();
+            camera.target.x -= delta.x / camera.zoom;
+            camera.target.y -= delta.y / camera.zoom;
+        }
         BeginMode2D(camera);
             ClearBackground(GRAY);
             DrawGameState(_gameState);

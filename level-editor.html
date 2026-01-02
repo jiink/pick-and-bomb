@@ -116,7 +116,7 @@
         <div class="control-group">
             <label>Grid Gen</label>
             <div class="row">
-                <input type="number" id="gridSpacing" value="2" placeholder="Gap" style="width: 40px" title="Spacing">
+                <input type="number" id="gridSpacing" value="1" placeholder="Gap" style="width: 40px" title="Spacing">
                 <input type="range" id="gridOffset" min="0" max="1" step="0.1" value="0.5" style="width: 50px" title="Row Offset">
                 <button onclick="generateGrid()">Gen</button>
             </div>
@@ -139,6 +139,7 @@
         <div class="control-group">
             <label>Actions</label>
             <div class="row">
+                <button class="primary" onclick="autoWall()">Auto Wall</button>
                 <button class="warning" onclick="undo()" title="Ctrl+Z">Undo</button>
                 <button class="danger" onclick="clearMap()">Clear</button>
                 <button class="primary" onclick="generateCode()">Get Text</button>
@@ -494,6 +495,40 @@
             } else {
                 // Just in case no undo needed
                 historyStack.pop();
+            }
+        }
+
+        function autoWall() {
+            if (!voronoi || points.length === 0) return;
+            saveState();
+
+            let changed = false;
+            const eps = 0.001; // Epsilon for float comparison
+
+            for (let i = 0; i < points.length; i++) {
+                // Get the computed polygon for this cell
+                const polygon = voronoi.cellPolygon(i);
+                if (!polygon) continue;
+
+                let touchesEdge = false;
+
+                // Check every vertex of the polygon
+                for (const [x, y] of polygon) {
+                    if (x < eps || x > worldWidth - eps || y < eps || y > worldHeight - eps) {
+                        touchesEdge = true;
+                        break;
+                    }
+                }
+
+                if (touchesEdge && points[i].typeId !== CELL_TYPES.WALL.id) {
+                    points[i].typeId = CELL_TYPES.WALL.id;
+                    paintDirtyIdx.add(i); // Mark for redraw
+                    changed = true;
+                }
+            }
+
+            if (!changed) {
+                historyStack.pop(); // Remove undo state if nothing happened
             }
         }
 

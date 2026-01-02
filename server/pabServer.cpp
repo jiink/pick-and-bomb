@@ -15,7 +15,7 @@ namespace {
     uint32_t _tickNum = 0;
     uint8_t _nextPlayerId = 0;
     std::deque<OutgoingPacket> _netPacketsToSend;
-    const size_t MAX_PACKET_SIZE = 10000;
+    const size_t MAX_PACKET_SIZE = 100000;
     const size_t MAX_PACKET_COUNT = 100;
 
     Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
@@ -106,7 +106,7 @@ namespace {
         // newPField.AddCell({17, 37}, CellType::DIRT);
         // newPField.AddCell({41, 41}, CellType::DIRT);
         // state.playfield = newPField;
-        const char lvlPath[50] = "tinyLevel.vlvl";
+        const char lvlPath[50] = "bigLevel.vlvl";
         auto lvlOpt = LoadLevel(lvlPath);
         if (!lvlOpt.has_value()) {
             PAB_ERR("Failed to load level \"%s\"", lvlPath);

@@ -33,6 +33,8 @@ namespace {
     bool _firstSnapshotReceived = false;
     Shader _playfieldShader;
     Texture _playfieldTex;
+    Texture _cellPropertyTex;
+    Texture _testTex;
 
     const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
         for (const auto& p : snap.players) {
@@ -62,7 +64,11 @@ namespace {
     }
 
     void DrawPlayfield(const Playfield& playfield) {
+        int cellPropLoc = GetShaderLocation(_playfieldShader, "cellProps");
+        SetShaderValueTexture(_playfieldShader, cellPropLoc, _cellPropertyTex);
         BeginShaderMode(_playfieldShader);
+            int testTexLoc = GetShaderLocation(_playfieldShader, "testTex");
+            SetShaderValueTexture(_playfieldShader, testTexLoc, _testTex);
             DrawTexturePro(_playfieldTex,
                 Rectangle {0, 0, (float)_playfieldTex.width, (float)_playfieldTex.height},
                 Rectangle {0, 0, playfield._worldWidth, playfield._worldHeight},
@@ -159,9 +165,40 @@ namespace {
         return pfImage;
     }
 
+    Image GenCellPropertyImage(Playfield& pf) {
+        const int numComponents = 4;
+        int imW = pf.GetAllCells().size();
+        int imH = 1;
+        float *pixels = (float*)RL_CALLOC(imW * imH * numComponents, sizeof(float));
+        const int y = 0;
+        for (int x = 0; x < imW; x++) {
+            float cellNormalizedHp = pf.GetAllCells()[x].health / 100.0f;
+            int idx = (y * imW + x) * numComponents;
+            pixels[idx + 0] = cellNormalizedHp;
+            pixels[idx + 1] = 0.0f;
+            pixels[idx + 2] = 0.0f;
+            pixels[idx + 3] = 1.0f;
+            if (x == 3) {
+                PAB_INFO("> r is %.2f", pixels[idx + 0]);
+            }
+        }
+        Image cImage = {
+            .data = pixels,
+            .width = imW,
+            .height = imH,
+            .mipmaps = 1,
+            .format = PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
+        };
+        return cImage;
+    }
+
     void UpdatePlayfieldTex(Playfield& pf) {
         Image newPfImg = GenPlayfieldImage(pf, 16);
         _playfieldTex = LoadTextureFromImage(newPfImg);
+        Image cellPImg = GenCellPropertyImage(pf);
+        _cellPropertyTex = LoadTextureFromImage(cellPImg);
+        Image testImg = GenImageChecked(32, 32, 1, 1, YELLOW, BLUE);
+        _testTex = LoadTextureFromImage(testImg);
     }
 }
 
@@ -242,6 +279,12 @@ namespace pab::client {
         _tickNum++;
         UpdatePlayerInputState(_inputs, _inputBindings, 0);
         NetSendInputs(_inputs);
+        
+        if (_cellPropertyTex.id > 0) {
+            Image cellPImg = GenCellPropertyImage(_gameState.playfield);
+            UpdateTexture(_cellPropertyTex, cellPImg.data);
+            UnloadImage(cellPImg);
+        }
     }
 
     void UpdateInterpolation(float dt) {

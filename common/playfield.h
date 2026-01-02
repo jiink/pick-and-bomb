@@ -52,4 +52,5 @@ public:
     void PopulateFromLevelData(LevelData lvlDat);
     std::vector<Cell*> GetAndCleanDirtyCells();
     bool UpdateCell(uint16_t idx, float hp);
+    int GetNumCells();
 };

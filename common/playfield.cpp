@@ -76,6 +76,11 @@ bool Playfield::UpdateCell(uint16_t idx, float hp)
     return true;
 }
 
+int Playfield::GetNumCells()
+{
+    return _cells.size();
+}
+
 Cell* Playfield::GetCellAtWorldPos(Vector2 pos)
 {
     int bX = (int)(pos.x / _bucketSize);

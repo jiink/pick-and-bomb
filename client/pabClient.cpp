@@ -121,8 +121,8 @@ namespace {
     Image GenPlayfieldImage(Playfield& pf, int pixPerWorldUnit) {
         int imW = std::floorf(pf._worldWidth) * pixPerWorldUnit;
         int imH = std::floorf(pf._worldHeight) * pixPerWorldUnit;
-        Image pfImage = GenImageColor(imW, imH, BLACK);
-        Color* pixels = (Color*)pfImage.data;
+        const int numComponents = 4;
+        float *pixels = (float*)RL_CALLOC(imW * imH * numComponents, sizeof(float));
         double startTime = GetTime();
         #pragma omp parallel for
         for (int y = 0; y < imH; y++) {
@@ -133,18 +133,29 @@ namespace {
                 };
                 Cell* cell = pf.GetCellAtWorldPos(samplePos);
                 CellType cellType = CellType::AIR;
+                uint16_t cellId = 0;
                 if (cell) {
                     cellType = cell->type;
+                    cellId = cell->id;
                 }
-                Color pixCol = Color { (uint8_t)cellType, 0, 0, 255 };
-                int idx = y * imW + x;
-                pixels[idx] = pixCol;
+                int idx = (y * imW + x) * numComponents;
+                pixels[idx + 0] = (float)cellType;
+                pixels[idx + 1] = (float)cellId;
+                pixels[idx + 2] = 0.0f;
+                pixels[idx + 3] = 1.0f;
             }
         }
         double endTime = GetTime();
         int elapsedMs = std::ceil((endTime - startTime) * 1000.0f);
         PAB_INFO("GenPlayfieldImage took %d ms to take %d samples",
             elapsedMs, imW * imH);
+        Image pfImage = {
+            .data = pixels,
+            .width = imW,
+            .height = imH,
+            .mipmaps = 1,
+            .format = PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
+        };
         return pfImage;
     }
 

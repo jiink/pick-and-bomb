@@ -20,8 +20,8 @@ out vec4 finalColor;
 void main()
 {
     vec4 texel = texture(texture0, fragTexCoord);
-    int paletteIdx = int(texel.r * 255.0 + 0.5);
-    paletteIdx = clamp(paletteIdx, 0, 255);
+    int cellType = int(texel.r);
+    int paletteIdx = clamp(cellType, 0, 255);
     finalColor = palette[paletteIdx];
 }
     )";

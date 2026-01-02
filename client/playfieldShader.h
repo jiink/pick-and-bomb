@@ -15,7 +15,6 @@ uniform sampler2D texture0;
 uniform vec4 palette[256];
 
 uniform sampler2D cellProps;
-uniform sampler2D testTex;
 
 // Output fragment color
 out vec4 finalColor;
@@ -30,9 +29,7 @@ void main()
     vec4 cellP = texelFetch(cellProps, ivec2(cellId, 0), 0);
     float cellHp = cellP.r;
     vec3 solidColor = cellTypeCol.rgb * cellHp;
-    solidColor.g = cellHp;
-    //finalColor = vec4(texture(cellProps, fragTexCoord).rgb, cellTypeCol.a);
-    finalColor = texture(testTex, fragTexCoord);
+    finalColor = vec4(solidColor, cellTypeCol.a);
 }
     )";
 }

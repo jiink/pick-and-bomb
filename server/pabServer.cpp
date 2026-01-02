@@ -33,7 +33,7 @@ namespace {
         const PlayerInputState& pInput,
         const float dt)
     {
-        const float speed = 2.0f;
+        const float speed = 5.0f;
         player.pos = Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
         state.playfield.DamageCell(player.pos, 100.0f * dt);
     }

@@ -26,6 +26,13 @@ struct Cell {
     bool isDirty;
 };
 
+struct VoronoiInfo {
+    Cell* cell;      // The closest cell (can be nullptr)
+    Cell* cell2;      // The second closest cell (can be nullptr)
+    float dist1Sqr;  // Squared distance to closest
+    float dist2Sqr;  // Squared distance to 2nd closest
+};
+
 // TODO look into using PhysFS to publish the game as a single exe
 
 class Playfield {
@@ -42,7 +49,7 @@ public:
     Playfield(float worldWidth, float worldHeight, float bucketSize);
     Playfield();
     bool AddCell(Vector2 worldPos, CellType cType);
-    Cell* GetCellAtWorldPos(Vector2 pos);
+    Cell* GetCellAtWorldPos(Vector2 pos, float* outDistSqr = nullptr);
     void DamageCell(Vector2 worldPos, float damage);
     bool IsInitialized() const;
     const std::vector<Cell>& GetAllCells() const { return _cells; }
@@ -53,4 +60,5 @@ public:
     std::vector<Cell*> GetAndCleanDirtyCells();
     bool UpdateCell(uint16_t idx, float hp);
     int GetNumCells();
+    VoronoiInfo GetVoronoiInfo(Vector2 pos);
 };

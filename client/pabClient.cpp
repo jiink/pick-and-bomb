@@ -130,25 +130,41 @@ namespace {
         double startTime = GetTime();
         #pragma omp parallel for
         for (int y = 0; y < imH; y++) {
-            for (int x = 0; x < imW; x++) {
-                Vector2 samplePos = Vector2 {
-                    x / (float)pixPerWorldUnit,
-                    y / (float)pixPerWorldUnit
-                };
-                Cell* cell = pf.GetCellAtWorldPos(samplePos);
-                CellType cellType = CellType::AIR;
-                uint16_t cellId = 0;
-                if (cell) {
-                    cellType = cell->type;
-                    cellId = cell->id;
-                }
-                int idx = (y * imW + x) * numComponents;
-                pixels[idx + 0] = (float)cellType;
-                pixels[idx + 1] = (float)cellId;
-                pixels[idx + 2] = 0.0f;
-                pixels[idx + 3] = 1.0f;
+        for (int x = 0; x < imW; x++) {
+            Vector2 samplePos = Vector2 {
+                x / (float)pixPerWorldUnit,
+                y / (float)pixPerWorldUnit
+            };
+
+            // We only need the Closest Cell!
+            float distSqr = 0;
+            Cell* cell = pf.GetCellAtWorldPos(samplePos, &distSqr);
+
+            float id = 0.0f;
+            float vecX = 0.0f;
+            float vecY = 0.0f;
+            float type = 0.0f;
+
+            if (cell) {
+                id = (float)cell->id;
+                type = (float)cell->type;
+                
+                // Calculate vector from Sample Position -> Cell Center
+                // We multiply by pixPerWorldUnit to store it in "Pixel Space" 
+                // (makes shader math easier), or keep it World Space. 
+                // Let's use PIXEL SPACE for precision in the texture.
+                Vector2 diff = Vector2Subtract(cell->pos, samplePos);
+                vecX = diff.x * pixPerWorldUnit;
+                vecY = diff.y * pixPerWorldUnit;
             }
+
+            int idx = (y * imW + x) * numComponents;
+            pixels[idx + 0] = id;
+            pixels[idx + 1] = vecX; // Offset X
+            pixels[idx + 2] = vecY; // Offset Y
+            pixels[idx + 3] = type;
         }
+    }
         double endTime = GetTime();
         int elapsedMs = std::ceil((endTime - startTime) * 1000.0f);
         PAB_INFO("GenPlayfieldImage took %d ms to take %d samples",
@@ -170,10 +186,11 @@ namespace {
         float *pixels = (float*)RL_CALLOC(imW * imH * numComponents, sizeof(float));
         const int y = 0;
         for (int x = 0; x < imW; x++) {
-            float cellNormalizedHp = pf.GetAllCells()[x].health / 100.0f;
+            const Cell& cell = pf.GetAllCells()[x];
+            float cellNormalizedHp = cell.health / 100.0f;
             int idx = (y * imW + x) * numComponents;
             pixels[idx + 0] = cellNormalizedHp;
-            pixels[idx + 1] = 0.0f;
+            pixels[idx + 1] = (float)(cell.type);
             pixels[idx + 2] = 0.0f;
             pixels[idx + 3] = 1.0f;
         }
@@ -190,9 +207,10 @@ namespace {
     void UpdatePlayfieldTex(Playfield& pf) {
         Image newPfImg = GenPlayfieldImage(pf, 16);
         _playfieldTex = LoadTextureFromImage(newPfImg);
+        SetTextureFilter(_playfieldTex, TEXTURE_FILTER_POINT);
         Image cellPImg = GenCellPropertyImage(pf);
         _cellPropertyTex = LoadTextureFromImage(cellPImg);
-        int _cellPropertyShaderLoc = GetShaderLocation(_playfieldShader, "cellProps");
+        _cellPropertyShaderLoc = GetShaderLocation(_playfieldShader, "cellProps");
     }
 }
 

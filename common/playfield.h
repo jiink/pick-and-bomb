@@ -36,5 +36,6 @@ public:
     bool IsInitialized() const;
     const std::vector<Cell>& GetAllCells() const { return _cells; }
     void Clear();
+    void Reset(float worldWidth, float worldHeight, float bucketSize);
     bool AddRawCell(const Cell& cell);
 };

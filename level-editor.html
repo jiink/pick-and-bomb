@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voronoi Level Editor - Fixed Delete</title>
+    <title>Voronoi Level Editor - Auto Buckets</title>
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
     <style>
         :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
@@ -76,7 +76,7 @@
 </head>
 <body>
 
-    <h1>Voronoi Editor (Resizable Brush)</h1>
+    <h1>Voronoi Editor (Auto Bucket Size)</h1>
 
     <div class="controls">
         <div class="control-group">
@@ -122,6 +122,20 @@
             </div>
         </div>
 
+        <!-- NEW NOISE CONTROLS -->
+        <div class="control-group">
+            <label>Noise (Dirt->Stone)</label>
+            <div class="row">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <input type="number" id="noiseScale" value="0.1" step="0.01" style="width: 40px" title="Scale (Frequency)">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <input type="range" id="noiseThreshold" min="-1" max="1" step="0.1" value="0.2" style="width: 50px" title="Cutoff Threshold">
+                </div>
+                <button class="primary" onclick="applyNoise()">Apply</button>
+            </div>
+        </div>
+
         <div class="control-group">
             <label>Actions</label>
             <div class="row">
@@ -145,6 +159,34 @@
     <div id="toast">Copied to clipboard!</div>
 
     <script>
+        // --- Lightweight Perlin Noise Implementation ---
+        const Noise = (function() {
+            var p = new Uint8Array(512), permutation = new Uint8Array(256), gradP = new Float64Array(512);
+            var grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+            function seed(s) {
+                if(s > 0 && s < 1) s *= 65536; s = Math.floor(s); if(s < 256) s |= s << 8;
+                for(var i=0; i<256; i++) { var v = (i & 1) ? 0 : 255; var t = v ^ (s & 255); permutation[i] = permutation[i] = t; } // Reset somewhat
+                for(var i=0; i<256; i++) permutation[i] = i;
+                for(var i=0; i<256; i++) { var j = (Math.random()*256)|0; var t = permutation[i]; permutation[i] = permutation[j]; permutation[j] = t; }
+                for(var i=0; i<256; i++) p[i] = p[i+256] = permutation[i];
+            }
+            seed(Math.random());
+            function dot(g, x, y) { return g[0]*x + g[1]*y; }
+            function mix(a, b, t) { return (1-t)*a + t*b; }
+            function fade(t) { return t*t*t*(t*(t*6-15)+10); }
+            return {
+                seed: seed,
+                perlin2: function(x, y) {
+                    var X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+                    x -= Math.floor(x); y -= Math.floor(y);
+                    var u = fade(x), v = fade(y);
+                    var A = p[X]+Y, AA = p[A], AB = p[A+1], B = p[X+1]+Y, BA = p[B], BB = p[B+1];
+                    return mix(mix(dot(grad3[AA % 12], x, y), dot(grad3[BA % 12], x-1, y), u),
+                               mix(dot(grad3[AB % 12], x, y-1), dot(grad3[BB % 12], x-1, y-1), u), v);
+                }
+            };
+        })();
+
         // --- Configuration ---
         const CELL_TYPES = {
             AIR:      { id: 0, color: '#A0D8EF', label: 'AIR' },
@@ -318,7 +360,6 @@
                 if (points.length === 0) return;
 
                 // SPECIAL CASE: BULK DELETE
-                // Efficiently remove all points within the radius using filter
                 if (selectedType.id === -1) {
                     const initialCount = points.length;
                     
@@ -395,6 +436,8 @@
             }
         }
 
+        // --- Procedural Generation Logic ---
+
         function generateGrid() {
             saveState();
             const spacing = parseFloat(document.getElementById('gridSpacing').value);
@@ -416,6 +459,41 @@
                 }
             }
             geometryDirty = true;
+        }
+
+        function applyNoise() {
+            if (points.length === 0) return;
+            saveState();
+
+            const noiseScale = parseFloat(document.getElementById('noiseScale').value);
+            const noiseThreshold = parseFloat(document.getElementById('noiseThreshold').value);
+            
+            // Re-seed for randomness every click
+            Noise.seed(Math.random());
+
+            let changed = false;
+            for(let i = 0; i < points.length; i++) {
+                // Only affect DIRT cells
+                if (points[i].typeId === CELL_TYPES.DIRT.id) {
+                    // Calculate noise value (-1.0 to 1.0 roughly)
+                    const n = Noise.perlin2(points[i].x * noiseScale, points[i].y * noiseScale);
+                    
+                    if (n > noiseThreshold) {
+                        points[i].typeId = CELL_TYPES.STONE.id;
+                        paintDirtyIdx.add(i);
+                        changed = true;
+                    }
+                }
+            }
+
+            if(changed) {
+                // Since we might change many points, forcing a partial render via the loop 
+                // is efficient enough, or we can just trigger a full repaint if >50% changed.
+                // paintDirtyIdx is processed in renderLoop.
+            } else {
+                // Just in case no undo needed
+                historyStack.pop();
+            }
         }
 
         function clearMap() {
@@ -545,10 +623,30 @@
 
         // --- Code Gen ---
         function generateCode() {
+            if (points.length === 0) {
+                document.getElementById('code-output').value = "// No points to generate.";
+                return;
+            }
+
             const idToName = {};
             for(let k in CELL_TYPES) if(CELL_TYPES[k].id !== -1) idToName[CELL_TYPES[k].id] = k;
 
-            let output = `// Level: ${worldWidth} x ${worldHeight} (${points.length} cells)\n`;
+            // --- AUTO CALCULATE BUCKET SIZE ---
+            // The C++ engine uses a 3x3 bucket search. The bucket size must be large
+            // enough that the closest seed is unlikely to be further than one bucket away.
+            // Formula: sqrt(Area / Points) gives average spacing (characteristic length).
+            // Multiplier 2.0 provides a safety margin for non-uniform distributions.
+            const totalArea = worldWidth * worldHeight;
+            const densityLength = Math.sqrt(totalArea / points.length);
+            const autoBucketSize = (densityLength * 2.0).toFixed(2);
+
+            let output = `// Level Dimensions: ${worldWidth} x ${worldHeight}\n`;
+            output += `static const float WORLD_WIDTH = ${worldWidth}f;\n`;
+            output += `static const float WORLD_HEIGHT = ${worldHeight}f;\n`;
+            
+            output += `// Optimized Bucket Size (Calculated from point density)\n`;
+            output += `static const float BUCKET_SIZE = ${autoBucketSize}f;\n\n`;
+
             output += `static const std::vector<LevelCellDef> levelData = {\n`;
             
             const lines = points.map(p => {

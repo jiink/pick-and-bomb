@@ -107,8 +107,7 @@ void UpdatePlayerInputState(PlayerInputState& pInput,
           pBindings.bindings[static_cast<size_t>(BindingAction::RIGHT)].key)) {
     pInput.rightPressed = true;
   }
-  if (IsKeyDown(
-          pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key)) {
+  if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
     pInput.mine = true;
   }
   if (IsGamepadAvailable(gamepadNum)) {

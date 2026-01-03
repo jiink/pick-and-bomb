@@ -195,6 +195,6 @@ Vector2 Playfield::GetBoundaryNormal(Vector2 pos) {
   }
   Vector2 p1 = info.cell->pos;
   Vector2 p2 = info.cell2->pos;
-  Vector2 norm = Vector2Subtract(p1, p2);
+  Vector2 norm = Vector2Subtract(p2, p1);
   return Vector2Normalize(norm);
 }

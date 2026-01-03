@@ -7,201 +7,183 @@
 // worldHeight: how many world units tall the playfield is
 // bucketSize: how many world units wide and tall each optimization grid cell is
 Playfield::Playfield(float worldWidth, float worldHeight, float bucketSize) {
-    Reset(worldWidth, worldHeight, bucketSize);
+  Reset(worldWidth, worldHeight, bucketSize);
 }
 
-Playfield::Playfield() {
-    
+Playfield::Playfield() {}
+
+bool Playfield::AddCell(Vector2 worldPos, CellType cType) {
+  Cell cell{};
+  cell.id = _cells.size();
+  cell.pos = worldPos;
+  cell.type = cType;
+  return AddRawCell(cell);
 }
 
-bool Playfield::AddCell(Vector2 worldPos, CellType cType)
-{
-    Cell cell{};
-    cell.id = _cells.size();
-    cell.pos = worldPos;
-    cell.type = cType;
-    return AddRawCell(cell);
-}
-
-bool Playfield::AddRawCell(Cell &cell)
-{
-    cell.health = 100.0f;
-    _cells.push_back(cell);
-    int bX = (int)(cell.pos.x / _bucketSize);
-    int bY = (int)(cell.pos.y / _bucketSize);
-    if (bX >= 0 && bX < _gridW &&
-        bY >= 0 && bY < _gridH)
-    {
-        _gridBuckets[bY * _gridW + bX].push_back(cell.id);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-void Playfield::PopulateFromLevelData(LevelData lvlDat)
-{
-    Reset(lvlDat.width, lvlDat.height, lvlDat.bucketSize);
-    for (LevelData::Point& p : lvlDat.points) {
-        CellType cType = CellType::AIR;
-        if (p.type < (uint8_t)CellType::MAX_CELL_TYPES) {
-            cType = (CellType)p.type;
-        }
-        AddCell(Vector2{p.x, p.y}, cType);
-    }
-}
-
-std::vector<Cell *> Playfield::GetAndCleanDirtyCells()
-{
-    std::vector<Cell*> dirtyCells;
-    dirtyCells.reserve(_dirtyCellIndices.size());
-    for (int idx : _dirtyCellIndices) {
-        Cell& c = _cells[idx];
-        c.isDirty = false;
-        dirtyCells.push_back(&c);
-    }
-    _dirtyCellIndices.clear();
-    return dirtyCells;
-}
-
-bool Playfield::UpdateCell(uint16_t idx, float hp)
-{
-    if (idx >= _cells.size()) {
-        return false;
-    }
-    _cells[idx].health = hp;
-    if (_cells[idx].health <= 0.0f) {
-        _cells[idx].type = CellType::AIR;
-    }
+bool Playfield::AddRawCell(Cell& cell) {
+  cell.health = 100.0f;
+  _cells.push_back(cell);
+  int bX = (int)(cell.pos.x / _bucketSize);
+  int bY = (int)(cell.pos.y / _bucketSize);
+  if (bX >= 0 && bX < _gridW && bY >= 0 && bY < _gridH) {
+    _gridBuckets[bY * _gridW + bX].push_back(cell.id);
     return true;
+  } else {
+    return false;
+  }
 }
 
-int Playfield::GetNumCells()
-{
-    return _cells.size();
+void Playfield::PopulateFromLevelData(LevelData lvlDat) {
+  Reset(lvlDat.width, lvlDat.height, lvlDat.bucketSize);
+  for (LevelData::Point& p : lvlDat.points) {
+    CellType cType = CellType::AIR;
+    if (p.type < (uint8_t)CellType::MAX_CELL_TYPES) {
+      cType = (CellType)p.type;
+    }
+    AddCell(Vector2{p.x, p.y}, cType);
+  }
 }
 
-Cell* Playfield::GetCellAtWorldPos(Vector2 pos, float* outDistSqr)
-{
-    int bX = (int)(pos.x / _bucketSize);
-    int bY = (int)(pos.y / _bucketSize);
-    float minDistSqr = std::numeric_limits<float>::max();
-    uint16_t closestIdx = 0;
-    bool foundClosestIdx = false;
-    for (int y = bY - 1; y <= bY + 1; y++) {
-        for (int x = bX - 1; x <= bX + 1; x++) {
-            bool inBounds = x >= 0 && x < _gridW &&
-                y >= 0 && y < _gridH;
-            if (!inBounds) {
-                continue;
-            }
-            const std::vector<int>& bucketIndices = _gridBuckets[y * _gridW + x];
-            for (int idx : bucketIndices) {
-                const Cell& c = _cells[idx];
-                float dist = Vector2DistanceSqr(pos, c.pos);
-                if (dist < minDistSqr) {
-                    minDistSqr = dist;
-                    closestIdx = idx;
-                    foundClosestIdx = true;
-                }
-            }
+std::vector<Cell*> Playfield::GetAndCleanDirtyCells() {
+  std::vector<Cell*> dirtyCells;
+  dirtyCells.reserve(_dirtyCellIndices.size());
+  for (int idx : _dirtyCellIndices) {
+    Cell& c = _cells[idx];
+    c.isDirty = false;
+    dirtyCells.push_back(&c);
+  }
+  _dirtyCellIndices.clear();
+  return dirtyCells;
+}
+
+bool Playfield::UpdateCell(uint16_t idx, float hp) {
+  if (idx >= _cells.size()) {
+    return false;
+  }
+  _cells[idx].health = hp;
+  if (_cells[idx].health <= 0.0f) {
+    _cells[idx].type = CellType::AIR;
+  }
+  return true;
+}
+
+int Playfield::GetNumCells() { return _cells.size(); }
+
+Cell* Playfield::GetCellAtWorldPos(Vector2 pos, float* outDistSqr) {
+  int bX = (int)(pos.x / _bucketSize);
+  int bY = (int)(pos.y / _bucketSize);
+  float minDistSqr = std::numeric_limits<float>::max();
+  uint16_t closestIdx = 0;
+  bool foundClosestIdx = false;
+  for (int y = bY - 1; y <= bY + 1; y++) {
+    for (int x = bX - 1; x <= bX + 1; x++) {
+      bool inBounds = x >= 0 && x < _gridW && y >= 0 && y < _gridH;
+      if (!inBounds) {
+        continue;
+      }
+      const std::vector<int>& bucketIndices = _gridBuckets[y * _gridW + x];
+      for (int idx : bucketIndices) {
+        const Cell& c = _cells[idx];
+        float dist = Vector2DistanceSqr(pos, c.pos);
+        if (dist < minDistSqr) {
+          minDistSqr = dist;
+          closestIdx = idx;
+          foundClosestIdx = true;
         }
+      }
     }
-    if (foundClosestIdx) {
-        if (outDistSqr) { *outDistSqr = minDistSqr; }
-        return &_cells[closestIdx];
-    } else {
-        return nullptr;
+  }
+  if (foundClosestIdx) {
+    if (outDistSqr) {
+      *outDistSqr = minDistSqr;
     }
+    return &_cells[closestIdx];
+  } else {
+    return nullptr;
+  }
 }
 
-void Playfield::DamageCell(Vector2 worldPos, float damage)
-{
-    Cell* cell = GetCellAtWorldPos(worldPos);
-    if (cell && cell->type != CellType::AIR) {
-        cell->health -= damage;
-        if (cell->health <= 0) {
-            cell->type = CellType::AIR;
-        }
-        if (!cell->isDirty) {
-            cell->isDirty = true;
-            _dirtyCellIndices.push_back(cell->id);
-        }
+void Playfield::DamageCell(Vector2 worldPos, float damage) {
+  Cell* cell = GetCellAtWorldPos(worldPos);
+  if (cell && cell->type != CellType::AIR) {
+    cell->health -= damage;
+    if (cell->health <= 0) {
+      cell->type = CellType::AIR;
     }
+    if (!cell->isDirty) {
+      cell->isDirty = true;
+      _dirtyCellIndices.push_back(cell->id);
+    }
+  }
 }
 
-bool Playfield::IsInitialized() const
-{
-    return _gridW > 0 && 
-        _gridH > 0 && 
-        _cells.size() > 0 && 
-        _gridBuckets.size() > 0;
+bool Playfield::IsInitialized() const {
+  return _gridW > 0 && _gridH > 0 && _cells.size() > 0 &&
+         _gridBuckets.size() > 0;
 }
 
-void Playfield::Clear()
-{
-    _cells.clear();
-    for (auto& bucket : _gridBuckets) {
-        bucket.clear();
-    }
-    _dirtyCellIndices.clear();
+void Playfield::Clear() {
+  _cells.clear();
+  for (auto& bucket : _gridBuckets) {
+    bucket.clear();
+  }
+  _dirtyCellIndices.clear();
 }
 
 void Playfield::Reset(float worldWidth, float worldHeight, float bucketSize) {
-    Clear();
-    _worldWidth = worldWidth;
-    _worldHeight = worldHeight;
-    _bucketSize = bucketSize;
-    _gridW = std::ceilf(worldWidth / _bucketSize);
-    _gridH = std::ceilf(worldHeight / _bucketSize);
-    _gridBuckets.resize(_gridW * _gridH);    
+  Clear();
+  _worldWidth = worldWidth;
+  _worldHeight = worldHeight;
+  _bucketSize = bucketSize;
+  _gridW = std::ceilf(worldWidth / _bucketSize);
+  _gridH = std::ceilf(worldHeight / _bucketSize);
+  _gridBuckets.resize(_gridW * _gridH);
 }
 
-VoronoiInfo Playfield::GetVoronoiInfo(Vector2 pos)
-{
-    VoronoiInfo result;
-    result.cell = nullptr;
-    result.cell2 = nullptr;
-    // Initialize with max float values
-    result.dist1Sqr = std::numeric_limits<float>::max();
-    result.dist2Sqr = std::numeric_limits<float>::max();
+VoronoiInfo Playfield::GetVoronoiInfo(Vector2 pos) {
+  VoronoiInfo result;
+  result.cell = nullptr;
+  result.cell2 = nullptr;
+  // Initialize with max float values
+  result.dist1Sqr = std::numeric_limits<float>::max();
+  result.dist2Sqr = std::numeric_limits<float>::max();
 
-    int bX = (int)(pos.x / _bucketSize);
-    int bY = (int)(pos.y / _bucketSize);
+  int bX = (int)(pos.x / _bucketSize);
+  int bY = (int)(pos.y / _bucketSize);
 
-    // Iterate 3x3 buckets around the position
-    for (int y = bY - 1; y <= bY + 1; y++) {
-        for (int x = bX - 1; x <= bX + 1; x++) {
-            // Check bounds
-            if (x < 0 || x >= _gridW || y < 0 || y >= _gridH) {
-                continue;
-            }
+  // Iterate 3x3 buckets around the position
+  for (int y = bY - 1; y <= bY + 1; y++) {
+    for (int x = bX - 1; x <= bX + 1; x++) {
+      // Check bounds
+      if (x < 0 || x >= _gridW || y < 0 || y >= _gridH) {
+        continue;
+      }
 
-            const std::vector<int>& bucketIndices = _gridBuckets[y * _gridW + x];
-            
-            // Check every cell in this bucket
-            for (int idx : bucketIndices) {
-                const Cell& c = _cells[idx];
-                float dSqr = Vector2DistanceSqr(pos, c.pos);
+      const std::vector<int>& bucketIndices = _gridBuckets[y * _gridW + x];
 
-                // Insertion logic for top 2
-                if (dSqr < result.dist1Sqr) {
-                    // Push current #1 down to #2
-                    result.dist2Sqr = result.dist1Sqr;
-                    result.cell2 = result.cell;
-                    
-                    // Set new #1
-                    result.dist1Sqr = dSqr;
-                    result.cell = (Cell*)&c; // Cast away const if needed or change return type
-                } 
-                else if (dSqr < result.dist2Sqr) {
-                    // It's not closer than #1, but it is closer than #2
-                    result.dist2Sqr = dSqr;
-                    result.cell2 = (Cell*)&c;
-                }
-            }
+      // Check every cell in this bucket
+      for (int idx : bucketIndices) {
+        const Cell& c = _cells[idx];
+        float dSqr = Vector2DistanceSqr(pos, c.pos);
+
+        // Insertion logic for top 2
+        if (dSqr < result.dist1Sqr) {
+          // Push current #1 down to #2
+          result.dist2Sqr = result.dist1Sqr;
+          result.cell2 = result.cell;
+
+          // Set new #1
+          result.dist1Sqr = dSqr;
+          result.cell =
+              (Cell*)&c; // Cast away const if needed or change return type
+        } else if (dSqr < result.dist2Sqr) {
+          // It's not closer than #1, but it is closer than #2
+          result.dist2Sqr = dSqr;
+          result.cell2 = (Cell*)&c;
         }
+      }
     }
-    
-    return result;
+  }
+
+  return result;
 }

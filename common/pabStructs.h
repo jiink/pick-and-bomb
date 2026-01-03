@@ -1,11 +1,11 @@
 #pragma once
 // NOTE: If you're using this header in a file that needs <raylib.h>, include
 // <raylib.h> before you include this file. That's because <raymath.h> will
-// define Vector2 and other types if they have not already been defined by <raylib.h>.
-// This is done by checking macros that <raylib.h> sets, e.g. `RL_VECTOR2_TYPE`.
-// So if you are getting multiple definitions of Vector2 or other math stuff,
-// just move up your `#include <raylib.h>` line.
-#include <raymath.h> 
+// define Vector2 and other types if they have not already been defined by
+// <raylib.h>. This is done by checking macros that <raylib.h> sets, e.g.
+// `RL_VECTOR2_TYPE`. So if you are getting multiple definitions of Vector2 or
+// other math stuff, just move up your `#include <raylib.h>` line.
+#include <raymath.h>
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
@@ -15,77 +15,77 @@
 
 const int TICK_HZ = 30;
 
-struct Player
-{
-    uint8_t id = 0;
-    bool dead = false;
-    Vector2 pos = Vector2 {0, 0};
-    float hue = 0.0f;
-    // client side
-    bool renderable = false;
+struct Player {
+  uint8_t id = 0;
+  bool dead = false;
+  Vector2 pos = Vector2{0, 0};
+  float hue = 0.0f;
+  // client side
+  bool renderable = false;
 };
 
 struct GameState {
-    Playfield playfield;
-    std::unordered_map<uint8_t, Player> players;
+  Playfield playfield;
+  std::unordered_map<uint8_t, Player> players;
 };
 
 struct PlayerInputState {
-    uint8_t playerId = 0;
-    Vector2 direction = Vector2 {0, 0};
-    // todo: make this a bitfield or something
-    bool attack = false;
-    bool attackPressed = false;
-    bool attackReleased = false;
-    bool wepSelectPressed = false;
-    bool leftPressed = false;
-    bool rightPressed = false;
+  uint8_t playerId = 0;
+  Vector2 direction = Vector2{0, 0};
+  // todo: make this a bitfield or something
+  bool attack = false;
+  bool attackPressed = false;
+  bool attackReleased = false;
+  bool wepSelectPressed = false;
+  bool leftPressed = false;
+  bool rightPressed = false;
 };
 
 struct InputState {
-    std::vector<PlayerInputState> playerInputs;
+  std::vector<PlayerInputState> playerInputs;
 };
 
 // ------- Networking -------------
 
 enum class Command {
-    SNAPSHOT,
-    INPUTS,
-    WELCOME,
-    NEW_PLAYER,
-    NEW_PLAYFIELD,
-    DIRTY_CELLS,
-    COMMAND_COUNT
+  SNAPSHOT,
+  INPUTS,
+  WELCOME,
+  NEW_PLAYER,
+  NEW_PLAYFIELD,
+  DIRTY_CELLS,
+  COMMAND_COUNT
 };
 
 struct CommandConfig {
-    bool isReliable;
+  bool isReliable;
 };
 
-constexpr std::array<CommandConfig, static_cast<size_t>(Command::COMMAND_COUNT)> CommandRegistry = {{
-    [static_cast<size_t>(Command::SNAPSHOT)]   = { .isReliable = false },
-    [static_cast<size_t>(Command::INPUTS)]     = { .isReliable = false },
-    [static_cast<size_t>(Command::WELCOME)]    = { .isReliable = true },
-    [static_cast<size_t>(Command::NEW_PLAYER)] = { .isReliable = true },
-    [static_cast<size_t>(Command::NEW_PLAYFIELD)] = { .isReliable = true },
-    [static_cast<size_t>(Command::DIRTY_CELLS)] = { .isReliable = false },
-}};
+constexpr std::array<CommandConfig, static_cast<size_t>(Command::COMMAND_COUNT)>
+    CommandRegistry = {{
+        [static_cast<size_t>(Command::SNAPSHOT)] = {.isReliable = false},
+        [static_cast<size_t>(Command::INPUTS)] = {.isReliable = false},
+        [static_cast<size_t>(Command::WELCOME)] = {.isReliable = true},
+        [static_cast<size_t>(Command::NEW_PLAYER)] = {.isReliable = true},
+        [static_cast<size_t>(Command::NEW_PLAYFIELD)] = {.isReliable = true},
+        [static_cast<size_t>(Command::DIRTY_CELLS)] = {.isReliable = false},
+    }};
 
 const size_t HEADER_SIZE = 5;
 
 // Subset of Player
 struct SnapshotPlayer {
-    uint8_t id = 0;
-    bool dead = true;
-    Vector2 pos = Vector2 {0, 0};
+  uint8_t id = 0;
+  bool dead = true;
+  Vector2 pos = Vector2{0, 0};
 };
 
 struct Snapshot {
-    uint32_t tick = 0;
-    std::vector<SnapshotPlayer> players;
+  uint32_t tick = 0;
+  std::vector<SnapshotPlayer> players;
 };
 
 struct OutgoingPacket {
-    std::vector<uint8_t> data;
-    std::optional<uint8_t> targetPlayerId;
+  std::vector<uint8_t> data;
+  std::optional<uint8_t> targetPlayerId;
 };

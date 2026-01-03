@@ -11,7 +11,6 @@ uniform sampler2D texture0;
 uniform vec4 palette[256];
 uniform sampler2D cellProps;
 
-// 0 = Sharp Vector, 1 = Smooth Vector, 2 = Raw Pixels (Fastest)
 uniform int renderMode; 
 
 out vec4 finalColor;
@@ -28,21 +27,17 @@ vec4 GetColorForCell(int id) {
 
 void main()
 {
-    // --- MODE 2: RAW PIXELS (FAST PATH) ---
+    // --- MODE 2: RAW PIXELS ---
     if (renderMode == 2) {
-        // Just read the ID stored in the pixel. No math, no loops.
-        // We use texelFetch to ensure we get the exact integer center.
         ivec2 texSize = textureSize(texture0, 0);
         ivec2 coord = ivec2(floor(fragTexCoord * vec2(texSize)));
-        
         float id = texelFetch(texture0, coord, 0).r;
         finalColor = GetColorForCell(int(round(id)));
         return; 
     }
 
-    // --- MODES 0 & 1: VECTOR RECONSTRUCTION (SLOWER) ---
-    // (Your existing Voronoi logic)
-    
+    // --- MODES 0 & 1: VECTOR RECONSTRUCTION ---
+
     ivec2 texSize = textureSize(texture0, 0);
     vec2 fw = fwidth(fragTexCoord * vec2(texSize));
     float pxScale = length(fw); 
@@ -87,14 +82,14 @@ void main()
     
     vec4 color1 = GetColorForCell(id1);
 
-    if (renderMode == 1) { // Smooth Vector
+    if (renderMode == 1) { // Trying to AA the edges
         vec4 color2 = GetColorForCell(id2);
         float aaWidth = pxScale * 1.5; 
         aaWidth = max(aaWidth, 0.0001);
         float edgeFactor = smoothstep(0.0, aaWidth, d2 - d1);
         float blendRatio = 0.5 + (0.5 * edgeFactor);
         finalColor = mix(color2, color1, blendRatio);
-    } else { // Sharp Vector (renderMode == 0)
+    } else { // Aliased edges
         finalColor = color1;
     }
 }

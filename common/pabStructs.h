@@ -20,6 +20,10 @@ struct Player {
   bool dead = false;
   Vector2 pos = Vector2{0, 0};
   float hue = 0.0f;
+  Vector2 velocity = Vector2{0, 0};
+  float defSpeed = 50.0f; //How fast you walk by default
+  float defFriction = 0.001f;
+  float friction = 0.001f;
   // client side
   bool renderable = false;
 };
@@ -39,6 +43,7 @@ struct PlayerInputState {
   bool wepSelectPressed = false;
   bool leftPressed = false;
   bool rightPressed = false;
+  bool mine = false;
 };
 
 struct InputState {

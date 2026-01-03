@@ -103,7 +103,7 @@ void NetSendInputs(const PlayerInputState& inputs) {
   pb << (uint8_t)Command::INPUTS << _tickNum << inputs.playerId
      << inputs.direction.x << inputs.direction.y << inputs.attack
      << inputs.attackPressed << inputs.attackReleased << inputs.wepSelectPressed
-     << inputs.leftPressed << inputs.rightPressed;
+     << inputs.leftPressed << inputs.rightPressed << inputs.mine;
   NetAddPacket(std::move(pb.buffer));
 }
 
@@ -248,7 +248,7 @@ void Init() {
       b = 89 / 2;
       a = 255;
       break;
-    case CellType::TREASURE:
+    case CellType::ORE:
       r = 255;
       g = 255;
       b = 0;

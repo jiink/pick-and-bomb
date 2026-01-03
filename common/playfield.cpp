@@ -187,3 +187,14 @@ VoronoiInfo Playfield::GetVoronoiInfo(Vector2 pos) {
 
   return result;
 }
+
+Vector2 Playfield::GetBoundaryNormal(Vector2 pos) {
+  VoronoiInfo info = GetVoronoiInfo(pos);
+  if (!info.cell || !info.cell2) {
+    return {0, 0};
+  }
+  Vector2 p1 = info.cell->pos;
+  Vector2 p2 = info.cell2->pos;
+  Vector2 norm = Vector2Subtract(p1, p2);
+  return Vector2Normalize(norm);
+}

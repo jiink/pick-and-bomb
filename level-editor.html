@@ -196,7 +196,7 @@
             AIR:      { id: 0, color: '#A0D8EF', label: 'AIR' },
             DIRT:     { id: 1, color: '#5D4037', label: 'DIRT' },
             STONE:    { id: 2, color: '#757575', label: 'STONE' },
-            TREASURE: { id: 3, color: '#FFD700', label: 'LOOT' },
+            ORE: { id: 3, color: '#FFD700', label: 'LOOT' },
             WALL:     { id: 4, color: '#212121', label: 'WALL' },
             DELETE:   { id: -1, color: '#b71c1c', label: 'DEL' } 
         };
@@ -274,7 +274,7 @@
                 const btn = document.createElement('div');
                 btn.className = 'p-btn';
                 btn.style.backgroundColor = type.color;
-                if(key === 'AIR' || key === 'TREASURE') btn.style.color = '#333';
+                if(key === 'AIR' || key === 'ORE') btn.style.color = '#333';
                 btn.innerText = type.label;
                 btn.onclick = () => {
                     document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('selected'));

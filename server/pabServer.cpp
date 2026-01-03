@@ -29,10 +29,41 @@ Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
 
 void UpdatePlayer(Player& player, GameState& state,
                   const PlayerInputState& pInput, const float dt) {
-  const float speed = 5.0f;
-  player.pos =
-      Vector2Add(player.pos, Vector2Scale(pInput.direction, speed * dt));
-  state.playfield.DamageCell(player.pos, 100.0f * dt);
+  if (Vector2Length(pInput.direction) > 0.0f) {
+    player.velocity = Vector2Add(
+        player.velocity, Vector2Scale(pInput.direction, player.defSpeed * dt));
+  }
+  float fric = pow(player.friction, dt);
+  player.velocity = Vector2Scale(player.velocity, fric);
+  Vector2 nextPos = Vector2Add(player.pos, Vector2Scale(player.velocity, dt));
+  Cell* targetCell = state.playfield.GetCellAtWorldPos(nextPos);
+  bool hittingWall = (!targetCell || GetCellTypeInfo(targetCell->type).isSolid);
+  if (hittingWall) {
+    if (pInput.mine) {
+      // stick to the wall since it's easier to mine it like that
+      if (targetCell) {
+        const float miningSpeed = 300.0f;
+        state.playfield.DamageCell(nextPos, miningSpeed * dt);
+      }
+      player.velocity = {0, 0};
+      nextPos = player.pos;
+    } else {
+      // slide along the wall since it's easier to move around like that
+      Vector2 normal = state.playfield.GetBoundaryNormal(nextPos);
+      float dotProd = Vector2DotProduct(player.velocity, normal);
+      if (dotProd < 0.0f) {
+        Vector2 slideForce = Vector2Scale(normal, dotProd);
+        player.velocity = Vector2Subtract(player.velocity, slideForce);
+      }
+      nextPos = Vector2Add(player.pos, Vector2Scale(player.velocity, dt));
+      Cell* slideCheck = state.playfield.GetCellAtWorldPos(nextPos);
+      if (!slideCheck || GetCellTypeInfo(slideCheck->type).isSolid) {
+        nextPos = player.pos;
+        player.velocity = {0, 0};
+      }
+    }
+  }
+  player.pos = nextPos;
 }
 
 PlayerInputState GetPlayerInputs(const InputState& inputs, int playerId) {
@@ -253,7 +284,7 @@ uint8_t MakeNewPlayer() {
   }
   _nextPlayerId++;
   _gameState.players[pId] = Player{
-      .id = pId, .dead = false, .pos = Vector2{0, 0}, .hue = pId * 40.0f};
+      .id = pId, .dead = false, .pos = Vector2{5, 5}, .hue = pId * 40.0f};
   PlayerInputState newInput = {.playerId = pId};
   _inputState.playerInputs.push_back(newInput);
   PAB_INFO("> Registered new inputs with player id %d", newInput.playerId);
@@ -274,7 +305,7 @@ void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerId) {
   PacketReader pr(data);
   pr >> pInputs.playerId >> pInputs.direction.x >> pInputs.direction.y >>
       pInputs.attack >> pInputs.attackPressed >> pInputs.attackReleased >>
-      pInputs.wepSelectPressed >> pInputs.leftPressed >> pInputs.rightPressed;
+      pInputs.wepSelectPressed >> pInputs.leftPressed >> pInputs.rightPressed >> pInputs.mine;
   pInputs.playerId = playerId;
   ApplyPlayerInputs(pInputs);
 }

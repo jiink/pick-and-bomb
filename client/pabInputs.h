@@ -8,6 +8,7 @@ enum class BindingAction {
   LEFT,
   RIGHT,
   ATTACK,
+  MINE,
   WEP_SELECT,
   NUM_ACTIONS
 };

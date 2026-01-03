@@ -12,6 +12,7 @@ void InitPlayerBindings(PlayerBindings& pBindings, int playerNum) {
         KEY_SPACE;
     pBindings.bindings[static_cast<size_t>(BindingAction::WEP_SELECT)].key =
         KEY_Q;
+    pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key = KEY_E;
     break;
   case 1:
     pBindings.bindings[static_cast<size_t>(BindingAction::UP)].key = KEY_I;
@@ -21,6 +22,7 @@ void InitPlayerBindings(PlayerBindings& pBindings, int playerNum) {
     pBindings.bindings[static_cast<size_t>(BindingAction::ATTACK)].key = KEY_O;
     pBindings.bindings[static_cast<size_t>(BindingAction::WEP_SELECT)].key =
         KEY_U;
+    pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key = KEY_E;
     break;
   case 2:
     pBindings.bindings[static_cast<size_t>(BindingAction::UP)].key = KEY_UP;
@@ -32,6 +34,7 @@ void InitPlayerBindings(PlayerBindings& pBindings, int playerNum) {
         KEY_RIGHT_SHIFT;
     pBindings.bindings[static_cast<size_t>(BindingAction::WEP_SELECT)].key =
         KEY_RIGHT_CONTROL;
+    pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key = KEY_E;
     break;
   default:
     pBindings.bindings[static_cast<size_t>(BindingAction::UP)].key = KEY_NULL;
@@ -43,6 +46,7 @@ void InitPlayerBindings(PlayerBindings& pBindings, int playerNum) {
         KEY_NULL;
     pBindings.bindings[static_cast<size_t>(BindingAction::WEP_SELECT)].key =
         KEY_NULL;
+    pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key = KEY_NULL;
     break;
   }
 }
@@ -102,6 +106,10 @@ void UpdatePlayerInputState(PlayerInputState& pInput,
   if (IsKeyPressed(
           pBindings.bindings[static_cast<size_t>(BindingAction::RIGHT)].key)) {
     pInput.rightPressed = true;
+  }
+  if (IsKeyDown(
+          pBindings.bindings[static_cast<size_t>(BindingAction::MINE)].key)) {
+    pInput.mine = true;
   }
   if (IsGamepadAvailable(gamepadNum)) {
     pInput.attack =

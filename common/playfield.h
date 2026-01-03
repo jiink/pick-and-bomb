@@ -1,7 +1,30 @@
 #pragma once
 #include <vector>
 
-enum class CellType { AIR, DIRT, STONE, TREASURE, WALL, MAX_CELL_TYPES };
+enum class CellType { AIR, DIRT, STONE, ORE, WALL, MAX_CELL_TYPES };
+
+struct CellTypeInfo {
+  bool isSolid;
+  bool isInvincible;
+  float maxHpPerUnitSq;
+  const char* name;
+};
+
+static const CellTypeInfo gCellTypeInfos[] = {
+    {false, true, 0.0f, "Air"},     // AIR
+    {true, false, 100.0f, "Dirt"},  // DIRT
+    {true, false, 100.0f, "Stone"}, // STONE
+    {true, false, 100.0f, "Ore"},   // ORE
+    {true, true, 100.0f, "Wall"},   // WALL
+};
+
+inline const CellTypeInfo& GetCellTypeInfo(CellType type) {
+    int index = static_cast<int>(type);
+    if(index < 0 || index >= static_cast<int>(CellType::MAX_CELL_TYPES)) {
+        return gCellTypeInfos[0];
+    }
+    return gCellTypeInfos[index];
+}
 
 struct LevelData {
   float width, height, bucketSize;
@@ -58,4 +81,5 @@ public:
   bool UpdateCell(uint16_t idx, float hp);
   int GetNumCells();
   VoronoiInfo GetVoronoiInfo(Vector2 pos);
+  Vector2 GetBoundaryNormal(Vector2 pos);
 };

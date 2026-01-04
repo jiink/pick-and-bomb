@@ -188,10 +188,22 @@
         .action-item {
             padding: 5px;
             cursor: pointer;
-            display: flex; justify-content: space-between;
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
         }
         .action-item:hover { background: #444; }
         .action-item.active { color: var(--accent); font-weight: bold; }
+
+        .action-delete-btn {
+            padding: 2px 6px;
+            color: #666;
+            border-radius: 3px;
+        }
+        .action-delete-btn:hover {
+            color: #ff5555;
+            background: #333;
+        }
 
     </style>
 </head>
@@ -302,30 +314,19 @@
 
 <script>
 /**
- * VITMAP WEB EDITOR
- * A single-file HTML5 implementation of the Vitmap editor.
+ * VITMAP WEB EDITOR - UPDATED
  */
 
 // --- DATA STRUCTURES ---
-
-class Vec2 {
-    constructor(x, y) { this.x = x; this.y = y; }
-}
-
+class Vec2 { constructor(x, y) { this.x = x; this.y = y; } }
 class Shape {
     constructor() {
-        this.points = []; // Array of {x, y}
+        this.points = []; 
         this.color = { r: 0, g: 170, b: 255, a: 255 };
         this.closed = true;
     }
 }
-
-class Frame {
-    constructor() {
-        this.shapes = [];
-    }
-}
-
+class Frame { constructor() { this.shapes = []; } }
 class Action {
     constructor(name) {
         this.name = name;
@@ -342,7 +343,7 @@ const ctx = canvas.getContext('2d');
 const project = {
     actions: [],
     currentActionIndex: 0,
-    isDirty: false, // New: Track unsaved changes
+    isDirty: false,
     
     init() {
         this.actions = [new Action("Idle")];
@@ -351,14 +352,8 @@ const project = {
         this.refreshUI();
     },
 
-    getCurrentAction() {
-        return this.actions[this.currentActionIndex];
-    },
-
-    getCurrentFrame() {
-        const action = this.getCurrentAction();
-        return action.frames[editor.currentFrameIndex];
-    },
+    getCurrentAction() { return this.actions[this.currentActionIndex]; },
+    getCurrentFrame() { return this.getCurrentAction().frames[editor.currentFrameIndex]; },
 
     createAction() {
         const nameInput = document.getElementById('new-action-name');
@@ -366,9 +361,28 @@ const project = {
         this.actions.push(new Action(name));
         this.currentActionIndex = this.actions.length - 1;
         editor.currentFrameIndex = 0;
-        editor.selectedShape = null; // Clear selection
+        editor.selectedShapes = []; // UPDATED
         nameInput.value = "";
-        this.isDirty = true; // Mark as changed
+        this.isDirty = true;
+        this.refreshUI();
+        editor.render();
+    },
+
+    // NEW: Delete Action
+    deleteAction(index) {
+        if (this.actions.length <= 1) {
+            alert("At least one action is required.");
+            return;
+        }
+        if (!confirm(`Delete action "${this.actions[index].name}"?`)) return;
+        
+        this.actions.splice(index, 1);
+        if (this.currentActionIndex >= this.actions.length) {
+            this.currentActionIndex = this.actions.length - 1;
+        }
+        editor.currentFrameIndex = 0;
+        editor.selectedShapes = [];
+        this.isDirty = true;
         this.refreshUI();
         editor.render();
     },
@@ -376,61 +390,55 @@ const project = {
     selectAction(index) {
         this.currentActionIndex = index;
         editor.currentFrameIndex = 0;
-        editor.selectedShape = null; // Fix Bug 1: Deselect on action change
+        editor.selectedShapes = []; // UPDATED
         this.refreshUI();
         editor.render();
     },
 
     addFrame() {
-        const action = this.getCurrentAction();
-        action.frames.push(new Frame());
-        editor.currentFrameIndex = action.frames.length - 1;
-        editor.selectedShape = null; // Fix Bug 1: Deselect
+        this.getCurrentAction().frames.push(new Frame());
+        editor.currentFrameIndex = this.getCurrentAction().frames.length - 1;
+        editor.selectedShapes = []; // UPDATED
         this.isDirty = true;
         this.refreshUI();
-        editor.render(); // Fix Bug 2: Force visual refresh
+        editor.render();
     },
 
     duplicateFrame() {
         const action = this.getCurrentAction();
         const currentFrame = action.frames[editor.currentFrameIndex];
-        // Deep copy
         const newFrame = new Frame();
         newFrame.shapes = JSON.parse(JSON.stringify(currentFrame.shapes));
         
         action.frames.splice(editor.currentFrameIndex + 1, 0, newFrame);
         editor.currentFrameIndex++;
-        editor.selectedShape = null; // Fix Bug 1
+        editor.selectedShapes = []; // UPDATED
         this.isDirty = true;
         this.refreshUI();
-        editor.render(); // Fix Bug 2
+        editor.render();
     },
 
     deleteFrame() {
         const action = this.getCurrentAction();
-        if (action.frames.length <= 1) return; // Keep at least one frame
+        if (action.frames.length <= 1) return; 
         action.frames.splice(editor.currentFrameIndex, 1);
         if (editor.currentFrameIndex >= action.frames.length) {
             editor.currentFrameIndex = action.frames.length - 1;
         }
-        editor.selectedShape = null; // Fix Bug 1
+        editor.selectedShapes = []; // UPDATED
         this.isDirty = true;
         this.refreshUI();
-        editor.render(); // Fix Bug 2
+        editor.render();
     },
 
     saveToJSON() {
-        const data = {
-            meta: { version: "1.0", generatedBy: "VitmapWeb" },
-            actions: this.actions
-        };
+        const data = { meta: { version: "1.0" }, actions: this.actions };
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = URL.createObjectURL(blob);
         a.download = "animation.json";
         a.click();
-        this.isDirty = false; // Reset warning
+        this.isDirty = false;
     },
 
     loadFromJSON(input) {
@@ -444,29 +452,35 @@ const project = {
                     this.actions = data.actions;
                     this.currentActionIndex = 0;
                     editor.currentFrameIndex = 0;
-                    editor.selectedShape = null;
-                    this.isDirty = false; // Reset warning on fresh load
+                    editor.selectedShapes = []; // UPDATED
+                    this.isDirty = false;
                     this.refreshUI();
                     editor.render();
-                } else {
-                    alert("Invalid JSON format");
                 }
-            } catch (err) {
-                alert("Error parsing JSON");
-            }
+            } catch (err) { alert("Error parsing JSON"); }
         };
         reader.readAsText(file);
     },
 
     refreshUI() {
-        // Refresh Action List
+        // Refresh Action List with DELETE BUTTON
         const list = document.getElementById('action-list');
         list.innerHTML = '';
         this.actions.forEach((act, idx) => {
             const div = document.createElement('div');
             div.className = `action-item ${idx === this.currentActionIndex ? 'active' : ''}`;
-            div.innerHTML = `<span>${act.name}</span> <small>${act.frames.length}f</small>`;
-            div.onclick = () => this.selectAction(idx);
+            div.innerHTML = `
+                <span style="flex:1">${act.name} <small style="color:#666">(${act.frames.length}f)</small></span> 
+                <i class="fas fa-trash action-delete-btn" title="Delete Action"></i>
+            `;
+            div.onclick = (e) => {
+                // Handle delete click vs select click
+                if (e.target.classList.contains('action-delete-btn') || e.target.closest('.action-delete-btn')) {
+                    this.deleteAction(idx);
+                } else {
+                    this.selectAction(idx);
+                }
+            };
             list.appendChild(div);
         });
 
@@ -480,22 +494,22 @@ const project = {
             div.innerText = idx + 1;
             div.onclick = () => { 
                 editor.currentFrameIndex = idx; 
-                editor.selectedShape = null; // Fix Bug 1: Deselect when clicking specific frame
+                editor.selectedShapes = []; // UPDATED
                 editor.render(); 
                 project.refreshUI(); 
             };
             frameCont.appendChild(div);
         });
 
-        // Refresh Layer List
+        // Refresh Layer List (Multi-select)
         const layerList = document.getElementById('layer-list');
         layerList.innerHTML = '';
         const currentFrame = this.getCurrentFrame();
-        // Reverse for display (top on top)
         [...currentFrame.shapes].reverse().forEach((shape, revIdx) => {
             const realIdx = currentFrame.shapes.length - 1 - revIdx;
             const div = document.createElement('div');
-            div.className = `layer-item ${editor.selectedShape === shape ? 'selected' : ''}`;
+            const isSelected = editor.selectedShapes.includes(shape);
+            div.className = `layer-item ${isSelected ? 'selected' : ''}`;
             
             const c = shape.color;
             const rgba = `rgba(${c.r},${c.g},${c.b},${c.a/255})`;
@@ -505,14 +519,24 @@ const project = {
                 <div class="layer-name">Shape ${realIdx} (${shape.points.length} pts)</div>
                 <i class="fas fa-eye"></i>
             `;
-            div.onclick = () => {
-                editor.selectedShape = shape;
-                editor.tool = 'select'; // Switch to select mode
+            // UPDATED CLICK HANDLER
+            div.onclick = (e) => {
+                editor.tool = 'select';
+                if (e.shiftKey) {
+                    const idx = editor.selectedShapes.indexOf(shape);
+                    if (idx > -1) editor.selectedShapes.splice(idx, 1);
+                    else editor.selectedShapes.push(shape);
+                } else {
+                    editor.selectedShapes = [shape];
+                }
+                
+                if (editor.selectedShapes.length === 1) {
+                    const s = editor.selectedShapes[0];
+                    document.getElementById('color-picker').value = rgbToHex(s.color.r, s.color.g, s.color.b);
+                    document.getElementById('alpha-slider').value = s.color.a;
+                }
+                
                 editor.updateButtonStates();
-                // Set color picker to shape color
-                const hex = rgbToHex(c.r, c.g, c.b);
-                document.getElementById('color-picker').value = hex;
-                document.getElementById('alpha-slider').value = c.a;
                 editor.render();
                 project.refreshUI();
             };
@@ -523,7 +547,7 @@ const project = {
 
 const editor = {
     camera: { x: 0, y: 0, zoom: 20 },
-    tool: 'select', // select, draw
+    tool: 'select', 
     gridSize: 16,
     snapToGrid: true,
     overlayImage: null,
@@ -535,14 +559,13 @@ const editor = {
     lastDrawTime: 0,
     onionSkin: false,
 
-    selectedShape: null,
-    selectedPointIndex: -1, // -1 means no point, just shape
+    selectedShapes: [], // UPDATED: Changed from single object to array
+    clipboard: [], // NEW: Clipboard
+    selectedPointIndex: -1, 
     isDragging: false,
     isPanning: false,
     dragStart: { x: 0, y: 0 },
     mouseWorld: { x: 0, y: 0 },
-    
-    // Temporary drawing state
     drawingShape: null,
 
     init() {
@@ -561,9 +584,8 @@ const editor = {
 
     setTool(t) {
         this.tool = t;
-        // Reset selection if drawing
         if (t === 'draw') {
-            this.selectedShape = null;
+            this.selectedShapes = [];
             this.selectedPointIndex = -1;
         }
         this.updateButtonStates();
@@ -580,53 +602,54 @@ const editor = {
         const alpha = parseInt(document.getElementById('alpha-slider').value);
         const col = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
         
-        if (this.selectedShape) {
-            this.selectedShape.color = col;
-            project.isDirty = true; // Mark change
+        if (this.selectedShapes.length > 0) {
+            this.selectedShapes.forEach(s => s.color = {...col});
+            project.isDirty = true;
             this.render();
             project.refreshUI();
         }
     },
 
     setAlpha(val) {
-        if (this.selectedShape) {
-            this.selectedShape.color.a = parseInt(val);
-            project.isDirty = true; // Mark change
+        if (this.selectedShapes.length > 0) {
+            this.selectedShapes.forEach(s => s.color.a = parseInt(val));
+            project.isDirty = true;
             this.render();
             project.refreshUI(); 
         }
     },
 
     deleteSelectedShape() {
-        if (!this.selectedShape) return;
+        if (this.selectedShapes.length === 0) return;
         const frame = project.getCurrentFrame();
-        const idx = frame.shapes.indexOf(this.selectedShape);
-        if (idx > -1) {
-            frame.shapes.splice(idx, 1);
-            this.selectedShape = null;
-            project.isDirty = true; // Mark change
-            this.render();
-            project.refreshUI();
-        }
+        
+        this.selectedShapes.forEach(shape => {
+            const idx = frame.shapes.indexOf(shape);
+            if (idx > -1) frame.shapes.splice(idx, 1);
+        });
+        
+        this.selectedShapes = [];
+        project.isDirty = true;
+        this.render();
+        project.refreshUI();
     },
 
-
     moveShapeOrder(dir) {
-        if (!this.selectedShape) return;
+        // Only move if single selection for simplicity
+        if (this.selectedShapes.length !== 1) return;
+        const shape = this.selectedShapes[0];
         const frame = project.getCurrentFrame();
-        const idx = frame.shapes.indexOf(this.selectedShape);
+        const idx = frame.shapes.indexOf(shape);
         if (idx === -1) return;
 
         const newIdx = idx + dir;
         if (newIdx >= 0 && newIdx < frame.shapes.length) {
-            // Swap
             [frame.shapes[idx], frame.shapes[newIdx]] = [frame.shapes[newIdx], frame.shapes[idx]];
-            project.isDirty = true; // Mark change
+            project.isDirty = true;
             this.render();
             project.refreshUI();
         }
     },
-
 
     togglePlay() {
         this.isPlaying = !this.isPlaying;
@@ -649,44 +672,17 @@ const editor = {
         requestAnimationFrame(loop);
     },
 
-    // --- RENDERING ---
-
-    screenToWorld(sx, sy) {
-        return {
-            x: (sx - this.camera.x) / this.camera.zoom,
-            y: (sy - this.camera.y) / this.camera.zoom
-        };
-    },
-
-    worldToScreen(wx, wy) {
-        return {
-            x: (wx * this.camera.zoom) + this.camera.x,
-            y: (wy * this.camera.zoom) + this.camera.y
-        };
-    },
-
-    snap(val) {
-        if (!this.snapToGrid) return val;
-        return Math.round(val); // Since grid coords are effectively integers relative to grid size 1
-    },
-
-    clearOverlay() {
-        this.overlayImage = null;
-        this.render();
-    },
+    screenToWorld(sx, sy) { return { x: (sx - this.camera.x) / this.camera.zoom, y: (sy - this.camera.y) / this.camera.zoom }; },
+    worldToScreen(wx, wy) { return { x: (wx * this.camera.zoom) + this.camera.x, y: (wy * this.camera.zoom) + this.camera.y }; },
+    snap(val) { if (!this.snapToGrid) return val; return Math.round(val); },
+    clearOverlay() { this.overlayImage = null; this.render(); },
 
     render() {
-        // Clear
-        ctx.fillStyle = "#121212"; // Canvas BG
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Grid
+        ctx.fillStyle = "#121212"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         this.drawGrid();
 
-        // Overlay Image
         if (this.overlayImage) {
-            ctx.save();
-            ctx.globalAlpha = this.overlayOpacity;
+            ctx.save(); ctx.globalAlpha = this.overlayOpacity;
             const screenPos = this.worldToScreen(0, 0); 
             const w = this.overlayImage.width * (this.camera.zoom / this.gridSize); 
             const h = this.overlayImage.height * (this.camera.zoom / this.gridSize);
@@ -694,72 +690,47 @@ const editor = {
             ctx.restore();
         }
 
-        // Onion Skin (Previous Frame)
         if (this.onionSkin && this.currentFrameIndex > 0) {
             const prevFrame = project.getCurrentAction().frames[this.currentFrameIndex - 1];
             this.drawFrame(prevFrame, 0.3);
         }
 
-        // Current Frame
         const frame = project.getCurrentFrame();
         this.drawFrame(frame, 1.0);
 
-        // --- NEW: Drawing Shape (In Progress) ---
         if (this.drawingShape) {
             const pts = this.drawingShape.points;
             if (pts.length > 0) {
-                // Draw the segments placed so far
                 ctx.beginPath();
                 const start = this.worldToScreen(pts[0].x, pts[0].y);
                 ctx.moveTo(start.x, start.y);
-                
-                // Mark the start point so user knows where to click to close
-                ctx.fillStyle = "#fff"; 
-                ctx.fillRect(start.x - 3, start.y - 3, 6, 6);
-
+                ctx.fillStyle = "#fff"; ctx.fillRect(start.x - 3, start.y - 3, 6, 6);
                 for (let i = 1; i < pts.length; i++) {
                     const p = this.worldToScreen(pts[i].x, pts[i].y);
-                    ctx.lineTo(p.x, p.y);
-                    // Draw vertex
-                    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+                    ctx.lineTo(p.x, p.y); ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
                 }
-                ctx.strokeStyle = "#00aaff";
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                // Draw "Rubber Band" line from last point to cursor
+                ctx.strokeStyle = "#00aaff"; ctx.lineWidth = 2; ctx.stroke();
                 const lastPt = pts[pts.length - 1];
                 const lastScreen = this.worldToScreen(lastPt.x, lastPt.y);
                 const mouseScreen = this.worldToScreen(this.mouseWorld.x, this.mouseWorld.y);
-
-                ctx.beginPath();
-                ctx.moveTo(lastScreen.x, lastScreen.y);
-                ctx.lineTo(mouseScreen.x, mouseScreen.y);
-                ctx.strokeStyle = "#00aaff"; // Active line color
-                ctx.lineWidth = 1; 
-                ctx.setLineDash([5, 5]); // Dashed line for preview
-                ctx.stroke();
-                ctx.setLineDash([]);
+                ctx.beginPath(); ctx.moveTo(lastScreen.x, lastScreen.y); ctx.lineTo(mouseScreen.x, mouseScreen.y);
+                ctx.strokeStyle = "#00aaff"; ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
             }
         }
 
-        // Selection UI
-        if (this.tool === 'select' && this.selectedShape) {
-            this.drawSelectionUI(this.selectedShape);
+        // UPDATED: Selection UI for multiple shapes
+        if (this.tool === 'select') {
+            this.selectedShapes.forEach(shape => {
+                // Only show points if single selection
+                this.drawSelectionUI(shape, this.selectedShapes.length === 1);
+            });
         }
         
-        // Mouse Cursor Guide (Snap)
         if (this.tool === 'draw' || this.isDragging) {
              const s = this.worldToScreen(this.mouseWorld.x, this.mouseWorld.y);
-             ctx.strokeStyle = "#fff";
-             ctx.lineWidth = 1;
-             ctx.beginPath();
-             ctx.arc(s.x, s.y, 3, 0, Math.PI*2);
-             ctx.stroke();
-             
-             // Coord text
-             ctx.fillStyle = "#fff";
-             ctx.font = "10px monospace";
+             ctx.strokeStyle = "#fff"; ctx.lineWidth = 1;
+             ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI*2); ctx.stroke();
+             ctx.fillStyle = "#fff"; ctx.font = "10px monospace";
              ctx.fillText(`${Math.round(this.mouseWorld.x)}, ${Math.round(this.mouseWorld.y)}`, s.x + 10, s.y);
         }
     },
@@ -768,72 +739,38 @@ const editor = {
         const zoom = this.camera.zoom;
         const offsetX = this.camera.x % zoom;
         const offsetY = this.camera.y % zoom;
-
-        ctx.beginPath();
-        ctx.strokeStyle = "#222";
-        ctx.lineWidth = 1;
-
-        // Draw vertical lines
-        for (let x = offsetX; x < canvas.width; x += zoom) {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
-        }
-        // Draw horizontal lines
-        for (let y = offsetY; y < canvas.height; y += zoom) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-        }
+        ctx.beginPath(); ctx.strokeStyle = "#222"; ctx.lineWidth = 1;
+        for (let x = offsetX; x < canvas.width; x += zoom) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
+        for (let y = offsetY; y < canvas.height; y += zoom) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
         ctx.stroke();
-
-        // Origin Cross
         const origin = this.worldToScreen(0, 0);
-        ctx.beginPath();
-        ctx.strokeStyle = "#444";
-        ctx.lineWidth = 2;
-        ctx.moveTo(origin.x - 10, origin.y);
-        ctx.lineTo(origin.x + 10, origin.y);
-        ctx.moveTo(origin.x, origin.y - 10);
-        ctx.lineTo(origin.x, origin.y + 10);
+        ctx.beginPath(); ctx.strokeStyle = "#444"; ctx.lineWidth = 2;
+        ctx.moveTo(origin.x - 10, origin.y); ctx.lineTo(origin.x + 10, origin.y);
+        ctx.moveTo(origin.x, origin.y - 10); ctx.lineTo(origin.x, origin.y + 10);
         ctx.stroke();
     },
 
     drawFrame(frame, alphaMult) {
-        frame.shapes.forEach(shape => {
-            this.drawPoly(shape, alphaMult, false);
-        });
+        frame.shapes.forEach(shape => { this.drawPoly(shape, alphaMult, false); });
     },
 
     drawPoly(shape, alphaMult, isOutline) {
         if (shape.points.length === 0) return;
-
         ctx.beginPath();
         const start = this.worldToScreen(shape.points[0].x, shape.points[0].y);
         ctx.moveTo(start.x, start.y);
-        
         for (let i = 1; i < shape.points.length; i++) {
             const p = this.worldToScreen(shape.points[i].x, shape.points[i].y);
             ctx.lineTo(p.x, p.y);
         }
-
         if (shape.closed) ctx.closePath();
-
         const c = shape.color;
         ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${(c.a/255) * alphaMult})`;
-        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alphaMult})`; // Opaque stroke for visibility? No, matching alpha
-        
-        if (!isOutline) {
-            ctx.fill();
-            // Optional: Draw stroke to hide anti-aliasing seams if needed, 
-            // but pure polygon fill is better for "Vitmap" style
-        } else {
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
+        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alphaMult})`; 
+        if (!isOutline) { ctx.fill(); } else { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); }
     },
 
-    drawSelectionUI(shape) {
-        // Outline
+    drawSelectionUI(shape, showPoints) {
         ctx.beginPath();
         if (shape.points.length > 0) {
             const start = this.worldToScreen(shape.points[0].x, shape.points[0].y);
@@ -843,23 +780,16 @@ const editor = {
                 ctx.lineTo(p.x, p.y);
             }
             ctx.closePath();
-            ctx.strokeStyle = "#00aaff";
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 3]);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            ctx.strokeStyle = "#00aaff"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
         }
-
-        // Vertices
-        shape.points.forEach((pt, idx) => {
-            const s = this.worldToScreen(pt.x, pt.y);
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, 4, 0, Math.PI*2);
-            ctx.fillStyle = (idx === this.selectedPointIndex) ? "#ff0000" : "#fff";
-            ctx.strokeStyle = "#000";
-            ctx.fill();
-            ctx.stroke();
-        });
+        if (showPoints) {
+            shape.points.forEach((pt, idx) => {
+                const s = this.worldToScreen(pt.x, pt.y);
+                ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI*2);
+                ctx.fillStyle = (idx === this.selectedPointIndex) ? "#ff0000" : "#fff";
+                ctx.strokeStyle = "#000"; ctx.fill(); ctx.stroke();
+            });
+        }
     }
 };
 
@@ -867,32 +797,28 @@ const editor = {
 
 function getMousePos(evt) {
     const rect = canvas.getBoundingClientRect();
-    return {
-        x: evt.clientX - rect.left,
-        y: evt.clientY - rect.top
-    };
+    return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
 }
 
 canvas.addEventListener('mousedown', (e) => {
     const pos = getMousePos(e);
-    
-    // Middle click pan
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
-        editor.isPanning = true;
-        editor.dragStart = pos;
-        return;
+        editor.isPanning = true; editor.dragStart = pos; return;
     }
 
     const worldPos = editor.screenToWorld(pos.x, pos.y);
     const snapPos = { x: editor.snap(worldPos.x), y: editor.snap(worldPos.y) };
 
     if (editor.tool === 'select') {
-        if (editor.selectedShape) {
-            for (let i = 0; i < editor.selectedShape.points.length; i++) {
-                const pt = editor.selectedShape.points[i];
+        // UPDATED: Multi-select Logic
+        
+        // 1. Check Points (Only if 1 shape selected)
+        if (editor.selectedShapes.length === 1) {
+            const shape = editor.selectedShapes[0];
+            for (let i = 0; i < shape.points.length; i++) {
+                const pt = shape.points[i];
                 const sPt = editor.worldToScreen(pt.x, pt.y);
-                const dist = Math.hypot(sPt.x - pos.x, sPt.y - pos.y);
-                if (dist < 8) {
+                if (Math.hypot(sPt.x - pos.x, sPt.y - pos.y) < 8) {
                     editor.selectedPointIndex = i;
                     editor.isDragging = true;
                     editor.render();
@@ -900,6 +826,8 @@ canvas.addEventListener('mousedown', (e) => {
                 }
             }
         }
+        
+        // 2. Check Shape Hit
         const frame = project.getCurrentFrame();
         let clickedShape = null;
         for (let i = frame.shapes.length - 1; i >= 0; i--) {
@@ -908,44 +836,54 @@ canvas.addEventListener('mousedown', (e) => {
                 break;
             }
         }
+
         if (clickedShape) {
-            editor.selectedShape = clickedShape;
-            editor.selectedPointIndex = -1;
-            const c = clickedShape.color;
-            document.getElementById('color-picker').value = rgbToHex(c.r, c.g, c.b);
-            document.getElementById('alpha-slider').value = c.a;
+            if (e.shiftKey) {
+                // Toggle selection
+                const idx = editor.selectedShapes.indexOf(clickedShape);
+                if (idx > -1) editor.selectedShapes.splice(idx, 1);
+                else editor.selectedShapes.push(clickedShape);
+                editor.selectedPointIndex = -1; 
+            } else {
+                // Standard select, but allow group drag if already selected
+                if (!editor.selectedShapes.includes(clickedShape)) {
+                    editor.selectedShapes = [clickedShape];
+                }
+                editor.selectedPointIndex = -1;
+                
+                if (editor.selectedShapes.length === 1) {
+                    const c = editor.selectedShapes[0].color;
+                    document.getElementById('color-picker').value = rgbToHex(c.r, c.g, c.b);
+                    document.getElementById('alpha-slider').value = c.a;
+                }
+            }
             editor.isDragging = true;
             editor.dragStart = snapPos;
         } else {
-            editor.selectedShape = null;
+            // Clicked Empty
+            if (!e.shiftKey) editor.selectedShapes = [];
         }
         project.refreshUI();
         editor.render();
     }
     else if (editor.tool === 'draw') {
-        if (e.button === 0) { // Left click
+        if (e.button === 0) { 
             if (!editor.drawingShape) {
-                // START NEW SHAPE
                 editor.drawingShape = new Shape();
                 editor.drawingShape.closed = false; 
                 editor.drawingShape.points.push(snapPos);
-                
                 const hex = document.getElementById('color-picker').value;
                 const rgb = hexToRgb(hex);
                 const alpha = parseInt(document.getElementById('alpha-slider').value);
                 editor.drawingShape.color = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
             } else {
-                // CONTINUE DRAWING
                 const startPt = editor.drawingShape.points[0];
-                if (editor.drawingShape.points.length >= 2 && 
-                    snapPos.x === startPt.x && snapPos.y === startPt.y) {
-                    
-                    // Close the shape
+                if (editor.drawingShape.points.length >= 2 && snapPos.x === startPt.x && snapPos.y === startPt.y) {
                     editor.drawingShape.closed = true;
                     project.getCurrentFrame().shapes.push(editor.drawingShape);
-                    editor.selectedShape = editor.drawingShape;
+                    editor.selectedShapes = [editor.drawingShape];
                     editor.drawingShape = null; 
-                    project.isDirty = true; // Mark as changed
+                    project.isDirty = true;
                     project.refreshUI();
                 } else {
                     editor.drawingShape.points.push(snapPos);
@@ -965,139 +903,113 @@ canvas.addEventListener('mousemove', (e) => {
     if (editor.isPanning) {
         const dx = pos.x - editor.dragStart.x;
         const dy = pos.y - editor.dragStart.y;
-        editor.camera.x += dx;
-        editor.camera.y += dy;
-        editor.dragStart = pos;
-        editor.render();
-        return;
+        editor.camera.x += dx; editor.camera.y += dy;
+        editor.dragStart = pos; editor.render(); return;
     }
 
-    if (editor.isDragging && editor.selectedShape) {
-        const dx = editor.mouseWorld.x - (editor.tool === 'select' && editor.selectedPointIndex === -1 ? editor.dragStart.x : 0);
-        const dy = editor.mouseWorld.y - (editor.tool === 'select' && editor.selectedPointIndex === -1 ? editor.dragStart.y : 0);
-
-        if (editor.selectedPointIndex !== -1) {
-            editor.selectedShape.points[editor.selectedPointIndex] = editor.mouseWorld;
-        } else {
+    if (editor.isDragging && editor.selectedShapes.length > 0) {
+        // Point Drag (single mode)
+        if (editor.selectedPointIndex !== -1 && editor.selectedShapes.length === 1) {
+            editor.selectedShapes[0].points[editor.selectedPointIndex] = editor.mouseWorld;
+        } 
+        // Group Drag
+        else {
             const deltaX = editor.mouseWorld.x - editor.dragStart.x;
             const deltaY = editor.mouseWorld.y - editor.dragStart.y;
-            
             if (deltaX !== 0 || deltaY !== 0) {
-                editor.selectedShape.points.forEach(p => {
-                    p.x += deltaX;
-                    p.y += deltaY;
+                editor.selectedShapes.forEach(shape => {
+                    shape.points.forEach(p => { p.x += deltaX; p.y += deltaY; });
                 });
                 editor.dragStart = editor.mouseWorld;
             }
         }
         editor.render();
     } else {
-        // ALWAYS Render in draw mode to update rubber band line
-        if (editor.tool === 'draw') {
-            editor.render();
-        } else {
-            editor.render(); // Keep cursor snap visible
-        }
+        editor.render();
     }
 });
 
 canvas.addEventListener('mouseup', () => {
-    // If we were dragging a shape/point, the project is now dirty
-    if (editor.isDragging) {
-        project.isDirty = true;
-    }
+    if (editor.isDragging) project.isDirty = true;
     editor.isDragging = false;
     editor.isPanning = false;
 });
 
-
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const zoomSpeed = 0.05;
     const direction = e.deltaY > 0 ? -1 : 1;
     let newZoom = editor.camera.zoom + (direction * 2);
-    if (newZoom < 1) newZoom = 1;
-    if (newZoom > 100) newZoom = 100;
-    
-    // Zoom towards mouse could be implemented here, centering for now
+    if (newZoom < 1) newZoom = 1; if (newZoom > 100) newZoom = 100;
     editor.camera.zoom = newZoom;
     editor.render();
 });
 
-// Context Menu disable
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-// Keyboard Shortcuts
 window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
 
-    // ESCAPE: Cancel drawing
     if (e.key === 'Escape') {
-        if (editor.tool === 'draw' && editor.drawingShape) {
-            editor.drawingShape = null; 
-            editor.render();
-        } else if (editor.tool === 'select') {
-            editor.selectedShape = null;
-            editor.render();
-            project.refreshUI();
-        }
+        if (editor.tool === 'draw' && editor.drawingShape) { editor.drawingShape = null; editor.render(); }
+        else if (editor.tool === 'select') { editor.selectedShapes = []; editor.render(); project.refreshUI(); }
     }
 
-    // CTRL + Z: Undo Point
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (editor.tool === 'draw' && editor.drawingShape) {
-            e.preventDefault();
-            editor.drawingShape.points.pop();
-            if (editor.drawingShape.points.length === 0) {
-                editor.drawingShape = null;
-            }
-            editor.render();
-            return;
+            e.preventDefault(); editor.drawingShape.points.pop();
+            if (editor.drawingShape.points.length === 0) editor.drawingShape = null;
+            editor.render(); return;
         }
     }
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
         if (editor.tool === 'select') {
-            if (editor.selectedPointIndex !== -1 && editor.selectedShape.points.length > 3) {
-                editor.selectedShape.points.splice(editor.selectedPointIndex, 1);
+            if (editor.selectedPointIndex !== -1 && editor.selectedShapes.length === 1 && editor.selectedShapes[0].points.length > 3) {
+                editor.selectedShapes[0].points.splice(editor.selectedPointIndex, 1);
                 editor.selectedPointIndex = -1;
-                project.isDirty = true;
-                editor.render();
+                project.isDirty = true; editor.render();
             } else {
                 editor.deleteSelectedShape();
             }
         }
     }
-    
-    if (e.key === ' ') {
-        editor.togglePlay();
-        e.preventDefault(); // Prevent scroll
+
+    // NEW: Copy / Paste Logic
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (editor.selectedShapes.length > 0) {
+            editor.clipboard = JSON.parse(JSON.stringify(editor.selectedShapes));
+        }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        if (editor.clipboard.length > 0) {
+            const frame = project.getCurrentFrame();
+            const newShapes = JSON.parse(JSON.stringify(editor.clipboard));
+            // Offset pasted shapes so they are visible
+            newShapes.forEach(s => s.points.forEach(p => { p.x += 8; p.y += 8; }));
+            
+            frame.shapes.push(...newShapes);
+            editor.selectedShapes = newShapes; // Select pasted
+            editor.selectedPointIndex = -1;
+            project.isDirty = true;
+            project.refreshUI();
+            editor.render();
+        }
     }
     
-    // Tools
+    if (e.key === ' ') { editor.togglePlay(); e.preventDefault(); }
     if (e.key === 's' || e.key === '1') editor.setTool('select');
     if (e.key === 'd' || e.key === '2') editor.setTool('draw');
 
-    // Frames
     if (e.key === 'ArrowLeft') {
-        if(editor.currentFrameIndex > 0) {
-            editor.currentFrameIndex--; 
-            editor.selectedShape = null; // Fix Bug 1
-            editor.render(); project.refreshUI();
-        }
+        if(editor.currentFrameIndex > 0) { editor.currentFrameIndex--; editor.selectedShapes = []; editor.render(); project.refreshUI(); }
     }
     if (e.key === 'ArrowRight') {
         const act = project.getCurrentAction();
-        if(editor.currentFrameIndex < act.frames.length - 1) {
-            editor.currentFrameIndex++;
-            editor.selectedShape = null; // Fix Bug 1
-            editor.render(); project.refreshUI();
-        }
+        if(editor.currentFrameIndex < act.frames.length - 1) { editor.currentFrameIndex++; editor.selectedShapes = []; editor.render(); project.refreshUI(); }
     }
 });
 
-
-// Drag and Drop Image Overlay
+// Helpers
 canvas.addEventListener('dragover', (e) => e.preventDefault());
 canvas.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -1106,58 +1018,30 @@ canvas.addEventListener('drop', (e) => {
         const reader = new FileReader();
         reader.onload = (evt) => {
             const img = new Image();
-            img.onload = () => {
-                editor.overlayImage = img;
-                editor.render();
-            };
+            img.onload = () => { editor.overlayImage = img; editor.render(); };
             img.src = evt.target.result;
         };
         reader.readAsDataURL(file);
     }
 });
 
-// --- HELPER FUNCTIONS ---
-
 function hexToRgb(hex) {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 };
+    return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
 }
-
-function rgbToHex(r, g, b) {
-    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-}
-
-// Ray-casting algorithm for point in polygon
+function rgbToHex(r, g, b) { return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
 function pointInPoly(pt, vs) {
-    let x = pt.x, y = pt.y;
-    let inside = false;
+    let x = pt.x, y = pt.y, inside = false;
     for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-        let xi = vs[i].x, yi = vs[i].y;
-        let xj = vs[j].x, yj = vs[j].y;
-        
-        let intersect = ((yi > y) != (yj > y))
-            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        let xi = vs[i].x, yi = vs[i].y, xj = vs[j].x, yj = vs[j].y;
+        let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
         if (intersect) inside = !inside;
     }
     return inside;
 }
 
-window.onbeforeunload = (e) => {
-    if (project.isDirty) {
-        e.preventDefault();
-        e.returnValue = "You have unsaved changes. Are you sure you want to exit?";
-        return e.returnValue;
-    }
-};
+window.onbeforeunload = (e) => { if (project.isDirty) { e.returnValue = "Unsaved changes"; return e.returnValue; } };
 
-// Initialize
 project.init();
 editor.init();
-
 </script>
-</body>
-</html>

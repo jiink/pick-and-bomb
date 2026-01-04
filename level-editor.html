@@ -132,9 +132,13 @@
             <label>Grid Gen</label>
             <div class="row">
                 <input type="number" id="gridSpacing" value="1" placeholder="Gap" style="width: 40px" title="Spacing">
-                <input type="range" id="gridOffset" min="0" max="1" step="0.1" value="0.5" style="width: 50px" title="Row Offset">
+                <input type="range" id="gridOffset" min="0" max="1" step="0.1" value="0.5" style="width: 50px" title="Offset Amount">
                 <button onclick="generateGrid()">Gen</button>
             </div>
+            <label class="checkbox-wrapper" style="margin-top:4px" title="Toggle between row offset and column offset">
+                <input type="checkbox" id="gridOffsetCol">
+                <span style="font-size:0.75rem">Vert. Offset</span>
+            </label>
         </div>
 
         <!-- RESTORED NOISE CONTROLS -->
@@ -488,6 +492,8 @@
             saveState();
             const spacing = parseFloat(document.getElementById('gridSpacing').value);
             const offsetRatio = parseFloat(document.getElementById('gridOffset').value);
+            const offsetCols = document.getElementById('gridOffsetCol').checked;
+
             if (spacing <= 0) return;
             const rows = Math.ceil(worldHeight / spacing);
             const cols = Math.ceil(worldWidth / spacing);
@@ -495,7 +501,15 @@
                 for (let x = 0; x < cols; x++) {
                     let wx = x * spacing + (spacing/2);
                     let wy = y * spacing + (spacing/2);
-                    if (y % 2 !== 0) wx += spacing * offsetRatio;
+                    
+                    if (offsetCols) {
+                        // Offset every other column vertically
+                        if (x % 2 !== 0) wy += spacing * offsetRatio;
+                    } else {
+                        // Offset every other row horizontally (Standard hex layout)
+                        if (y % 2 !== 0) wx += spacing * offsetRatio;
+                    }
+
                     if (wx > 0 && wx < worldWidth && wy > 0 && wy < worldHeight) {
                         points.push({ x: wx, y: wy, typeId: selectedType.id });
                     }
@@ -503,6 +517,7 @@
             }
             geometryDirty = true;
         }
+
 
         function applyNoise() {
             if (points.length === 0) return;

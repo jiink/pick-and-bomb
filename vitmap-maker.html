@@ -262,6 +262,18 @@
                 <label>Opacity</label>
                 <input type="range" min="0" max="1" step="0.1" value="0.3" oninput="editor.overlayOpacity = parseFloat(this.value); editor.render();">
             </div>
+            <div class="row">
+                <label>Scale</label>
+                <input type="range" min="0.1" max="5" step="0.1" value="1" oninput="editor.overlayScale = parseFloat(this.value); editor.render();">
+            </div>
+            <div class="row">
+                <label>Pos X</label>
+                <input type="range" min="-200" max="200" step="1" value="0" oninput="editor.overlayX = parseInt(this.value); editor.render();">
+            </div>
+            <div class="row">
+                <label>Pos Y</label>
+                <input type="range" min="-200" max="200" step="1" value="0" oninput="editor.overlayY = parseInt(this.value); editor.render();">
+            </div>
             <button onclick="editor.clearOverlay()" style="width:100%">Clear Overlay</button>
         </div>
     </div>
@@ -395,6 +407,15 @@ const project = {
         editor.render();
     },
 
+    renameAction(index) {
+        const newName = prompt("Enter new name for this action:", this.actions[index].name);
+        if (newName && newName.trim() !== "") {
+            this.actions[index].name = newName.trim();
+            this.refreshUI();
+        }
+    },
+
+
     addFrame() {
         this.getCurrentAction().frames.push(new Frame());
         editor.currentFrameIndex = this.getCurrentAction().frames.length - 1;
@@ -462,21 +483,29 @@ const project = {
         reader.readAsText(file);
     },
 
-    refreshUI() {
-        // Refresh Action List with DELETE BUTTON
+refreshUI() {
+        // Refresh Action List with DELETE and RENAME BUTTONS
         const list = document.getElementById('action-list');
         list.innerHTML = '';
         this.actions.forEach((act, idx) => {
             const div = document.createElement('div');
             div.className = `action-item ${idx === this.currentActionIndex ? 'active' : ''}`;
+            
+            // Added Rename Icon and prevent event bubbling
             div.innerHTML = `
-                <span style="flex:1">${act.name} <small style="color:#666">(${act.frames.length}f)</small></span> 
-                <i class="fas fa-trash action-delete-btn" title="Delete Action"></i>
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${act.name} <small style="color:#666">(${act.frames.length}f)</small></span> 
+                <div style="display:flex; gap:5px;">
+                    <i class="fas fa-edit action-btn" title="Rename" style="padding:2px 5px; color:#888;"></i>
+                    <i class="fas fa-trash action-delete-btn" title="Delete" style="padding:2px 5px; color:#888;"></i>
+                </div>
             `;
+            
             div.onclick = (e) => {
-                // Handle delete click vs select click
+                // Handle button clicks vs row selection
                 if (e.target.classList.contains('action-delete-btn') || e.target.closest('.action-delete-btn')) {
                     this.deleteAction(idx);
+                } else if (e.target.classList.contains('fa-edit') || e.target.closest('.fa-edit')) {
+                    this.renameAction(idx);
                 } else {
                     this.selectAction(idx);
                 }
@@ -552,6 +581,9 @@ const editor = {
     snapToGrid: true,
     overlayImage: null,
     overlayOpacity: 0.3,
+    overlayScale: 1.0,
+    overlayX: 0,
+    overlayY: 0,
     
     currentFrameIndex: 0,
     fps: 12,
@@ -682,14 +714,21 @@ const editor = {
         this.drawGrid();
 
         if (this.overlayImage) {
-            ctx.save(); ctx.globalAlpha = this.overlayOpacity;
-            const screenPos = this.worldToScreen(0, 0); 
-            const w = this.overlayImage.width * (this.camera.zoom / this.gridSize); 
-            const h = this.overlayImage.height * (this.camera.zoom / this.gridSize);
+            ctx.save(); 
+            ctx.globalAlpha = this.overlayOpacity;
+            
+            // Calculate screen position based on world coordinates (overlayX, overlayY)
+            const screenPos = this.worldToScreen(this.overlayX, this.overlayY); 
+            
+            // Calculate dimensions based on scale
+            const w = this.overlayImage.width * (this.camera.zoom / this.gridSize) * this.overlayScale; 
+            const h = this.overlayImage.height * (this.camera.zoom / this.gridSize) * this.overlayScale;
+            
             ctx.drawImage(this.overlayImage, screenPos.x - w/2, screenPos.y - h/2, w, h);
             ctx.restore();
         }
 
+        // ... (Keep the rest of the render function exactly as it was) ...
         if (this.onionSkin && this.currentFrameIndex > 0) {
             const prevFrame = project.getCurrentAction().frames[this.currentFrameIndex - 1];
             this.drawFrame(prevFrame, 0.3);
@@ -718,10 +757,8 @@ const editor = {
             }
         }
 
-        // UPDATED: Selection UI for multiple shapes
         if (this.tool === 'select') {
             this.selectedShapes.forEach(shape => {
-                // Only show points if single selection
                 this.drawSelectionUI(shape, this.selectedShapes.length === 1);
             });
         }
@@ -734,6 +771,7 @@ const editor = {
              ctx.fillText(`${Math.round(this.mouseWorld.x)}, ${Math.round(this.mouseWorld.y)}`, s.x + 10, s.y);
         }
     },
+
 
     drawGrid() {
         const zoom = this.camera.zoom;

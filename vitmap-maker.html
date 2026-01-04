@@ -656,10 +656,9 @@ const editor = {
         if (this.overlayImage) {
             ctx.save();
             ctx.globalAlpha = this.overlayOpacity;
-            const screenPos = this.worldToScreen(0, 0); // Overlay centered at origin for now
+            const screenPos = this.worldToScreen(0, 0); 
             const w = this.overlayImage.width * (this.camera.zoom / this.gridSize); 
             const h = this.overlayImage.height * (this.camera.zoom / this.gridSize);
-            // Center image
             ctx.drawImage(this.overlayImage, screenPos.x - w/2, screenPos.y - h/2, w, h);
             ctx.restore();
         }
@@ -674,9 +673,43 @@ const editor = {
         const frame = project.getCurrentFrame();
         this.drawFrame(frame, 1.0);
 
-        // Drawing Shape (in progress)
+        // --- NEW: Drawing Shape (In Progress) ---
         if (this.drawingShape) {
-            this.drawPoly(this.drawingShape, 1.0, true);
+            const pts = this.drawingShape.points;
+            if (pts.length > 0) {
+                // Draw the segments placed so far
+                ctx.beginPath();
+                const start = this.worldToScreen(pts[0].x, pts[0].y);
+                ctx.moveTo(start.x, start.y);
+                
+                // Mark the start point so user knows where to click to close
+                ctx.fillStyle = "#fff"; 
+                ctx.fillRect(start.x - 3, start.y - 3, 6, 6);
+
+                for (let i = 1; i < pts.length; i++) {
+                    const p = this.worldToScreen(pts[i].x, pts[i].y);
+                    ctx.lineTo(p.x, p.y);
+                    // Draw vertex
+                    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+                }
+                ctx.strokeStyle = "#00aaff";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw "Rubber Band" line from last point to cursor
+                const lastPt = pts[pts.length - 1];
+                const lastScreen = this.worldToScreen(lastPt.x, lastPt.y);
+                const mouseScreen = this.worldToScreen(this.mouseWorld.x, this.mouseWorld.y);
+
+                ctx.beginPath();
+                ctx.moveTo(lastScreen.x, lastScreen.y);
+                ctx.lineTo(mouseScreen.x, mouseScreen.y);
+                ctx.strokeStyle = "#00aaff"; // Active line color
+                ctx.lineWidth = 1; 
+                ctx.setLineDash([5, 5]); // Dashed line for preview
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
         }
 
         // Selection UI
@@ -823,26 +856,20 @@ canvas.addEventListener('mousedown', (e) => {
     const snapPos = { x: editor.snap(worldPos.x), y: editor.snap(worldPos.y) };
 
     if (editor.tool === 'select') {
-        // Check for vertex click on selected shape
+        // ... (Keep existing selection logic here, no changes needed for select tool) ...
         if (editor.selectedShape) {
             for (let i = 0; i < editor.selectedShape.points.length; i++) {
                 const pt = editor.selectedShape.points[i];
-                // Check distance in screen space for easier clicking
                 const sPt = editor.worldToScreen(pt.x, pt.y);
                 const dist = Math.hypot(sPt.x - pos.x, sPt.y - pos.y);
-                
                 if (dist < 8) {
                     editor.selectedPointIndex = i;
                     editor.isDragging = true;
-                    // For dragging vertices
                     editor.render();
                     return;
                 }
             }
         }
-
-        // Check for Shape Click (Raycasting)
-        // Reverse iterate to select top-most
         const frame = project.getCurrentFrame();
         let clickedShape = null;
         for (let i = frame.shapes.length - 1; i >= 0; i--) {
@@ -851,20 +878,14 @@ canvas.addEventListener('mousedown', (e) => {
                 break;
             }
         }
-
         if (clickedShape) {
             editor.selectedShape = clickedShape;
             editor.selectedPointIndex = -1;
-            
-            // Sync UI
             const c = clickedShape.color;
             document.getElementById('color-picker').value = rgbToHex(c.r, c.g, c.b);
             document.getElementById('alpha-slider').value = c.a;
-
-            // Prepare for move
             editor.isDragging = true;
-            editor.dragStart = snapPos; // Use world coords for logic
-            
+            editor.dragStart = snapPos;
         } else {
             editor.selectedShape = null;
         }
@@ -872,32 +893,39 @@ canvas.addEventListener('mousedown', (e) => {
         editor.render();
     }
     else if (editor.tool === 'draw') {
-        if (e.button === 0) { // Left click add point
+        if (e.button === 0) { // Left click
             if (!editor.drawingShape) {
+                // START NEW SHAPE
                 editor.drawingShape = new Shape();
+                editor.drawingShape.closed = false; // Initially open
                 editor.drawingShape.points.push(snapPos);
-                // Also initialize color from picker
+                
                 const hex = document.getElementById('color-picker').value;
                 const rgb = hexToRgb(hex);
                 const alpha = parseInt(document.getElementById('alpha-slider').value);
                 editor.drawingShape.color = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
             } else {
-                editor.drawingShape.points.push(snapPos);
-            }
-            editor.render();
-        } else if (e.button === 2) { // Right click cancel/close
-            if (editor.drawingShape) {
-                if (editor.drawingShape.points.length > 2) {
+                // CONTINUE DRAWING
+                // Check if clicking near the start point to CLOSE LOOP
+                const startPt = editor.drawingShape.points[0];
+                // Check if snapped position matches start position
+                if (editor.drawingShape.points.length >= 2 && 
+                    snapPos.x === startPt.x && snapPos.y === startPt.y) {
+                    
+                    // Close the shape
+                    editor.drawingShape.closed = true;
                     project.getCurrentFrame().shapes.push(editor.drawingShape);
                     editor.selectedShape = editor.drawingShape;
-                    editor.tool = 'select'; // Switch to select automatically? No, maybe keep drawing.
-                    // Let's actually finish drawing and keep tool 'draw' to start new shape.
+                    editor.drawingShape = null; // Clear pending shape
                     project.refreshUI();
+                } else {
+                    // Just add a new point
+                    editor.drawingShape.points.push(snapPos);
                 }
-                editor.drawingShape = null;
-                editor.render();
             }
-        }
+            editor.render();
+        } 
+        // Right click does nothing (per requirement)
     }
 });
 
@@ -921,10 +949,8 @@ canvas.addEventListener('mousemove', (e) => {
         const dy = editor.mouseWorld.y - (editor.tool === 'select' && editor.selectedPointIndex === -1 ? editor.dragStart.y : 0);
 
         if (editor.selectedPointIndex !== -1) {
-            // Moving Vertex
             editor.selectedShape.points[editor.selectedPointIndex] = editor.mouseWorld;
         } else {
-            // Moving Whole Shape (delta)
             const deltaX = editor.mouseWorld.x - editor.dragStart.x;
             const deltaY = editor.mouseWorld.y - editor.dragStart.y;
             
@@ -938,8 +964,12 @@ canvas.addEventListener('mousemove', (e) => {
         }
         editor.render();
     } else {
-        // Just hover update for snap cursor
-        editor.render();
+        // ALWAYS Render in draw mode to update rubber band line
+        if (editor.tool === 'draw') {
+            editor.render();
+        } else {
+            editor.render(); // Keep cursor snap visible
+        }
     }
 });
 
@@ -968,30 +998,45 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
 
+    // ESCAPE: Cancel drawing
+    if (e.key === 'Escape') {
+        if (editor.tool === 'draw' && editor.drawingShape) {
+            editor.drawingShape = null; // Discard whole shape
+            editor.render();
+        } else if (editor.tool === 'select') {
+            editor.selectedShape = null;
+            editor.render();
+            project.refreshUI();
+        }
+    }
+
+    // CTRL + Z: Undo Point
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (editor.tool === 'draw' && editor.drawingShape) {
+            e.preventDefault();
+            // Remove last point
+            editor.drawingShape.points.pop();
+            // If no points left, cancel shape
+            if (editor.drawingShape.points.length === 0) {
+                editor.drawingShape = null;
+            }
+            editor.render();
+            return;
+        }
+    }
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
         if (editor.tool === 'select') {
             if (editor.selectedPointIndex !== -1 && editor.selectedShape.points.length > 3) {
-                // Delete Point
                 editor.selectedShape.points.splice(editor.selectedPointIndex, 1);
                 editor.selectedPointIndex = -1;
                 editor.render();
             } else {
-                // Delete Shape
                 editor.deleteSelectedShape();
             }
         }
     }
-    if (e.key === 'Enter') {
-        // Finish drawing
-        if (editor.tool === 'draw' && editor.drawingShape) {
-            if (editor.drawingShape.points.length > 2) {
-                project.getCurrentFrame().shapes.push(editor.drawingShape);
-                project.refreshUI();
-            }
-            editor.drawingShape = null;
-            editor.render();
-        }
-    }
+    
     if (e.key === ' ') {
         editor.togglePlay();
     }

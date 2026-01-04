@@ -528,35 +528,36 @@
             ext = gl.getExtension('ANGLE_instanced_arrays');
             if (!ext) return alert("WebGL Instancing not supported");
 
-            // 1. Shaders: Manhattan Distance = Z-Depth
+            // 1. Shader: Manhattan Distance
             const vs = `
-                attribute vec2 a_geom;  // Pyramid geometry (local)
-                attribute vec2 a_pos;   // Instance Position (seed x,y)
-                attribute vec3 a_col;   // Instance Color (rgb)
+                attribute vec2 a_geom;  // Pyramid Geometry (Local, Rotated 45deg)
+                attribute vec2 a_pos;   // Instance Position (Seed World X,Y)
+                attribute vec3 a_col;   // Instance Color
                 
                 varying vec3 v_col;
                 
                 uniform vec2 u_res;     // Canvas Resolution
-                uniform float u_scale;  // Max size of pyramid base
+                uniform float u_scale;  // Pyramid Scale
 
                 void main() {
                     v_col = a_col;
                     
-                    // 1. Calculate World Position of this vertex
-                    // The geometry is a unit pyramid, we scale it huge to cover screen
+                    // 1. Vertex World Position
+                    // a_geom is now a diamond shape. 
                     vec2 worldPos = a_pos + (a_geom * u_scale);
 
-                    // 2. Calculate Manhattan Distance (L1)
-                    // This becomes our Z-depth. Closer = Smaller Z.
+                    // 2. Manhattan Distance (L1 Norm) = Depth
+                    // d = |dx| + |dy|
                     float dist = abs(worldPos.x - a_pos.x) + abs(worldPos.y - a_pos.y);
 
-                    // 3. Normalize Z for Depth Buffer (0.0 to 1.0)
-                    // Divide by u_scale to keep it in range
+                    // 3. Normalize Depth
+                    // Since geometry is rotated, the max distance at the tip of the diamond
+                    // corresponds exactly to u_scale.
                     float z = dist / u_scale;
 
-                    // 4. Map World (0..W, 0..H) to Clip Space (-1..1, 1..-1)
+                    // 4. Clip Space
                     vec2 clip = (worldPos / u_res) * 2.0 - 1.0;
-                    clip.y *= -1.0; // Flip Y for WebGL
+                    clip.y *= -1.0; 
 
                     gl_Position = vec4(clip, z, 1.0);
                 }
@@ -566,11 +567,12 @@
                 precision mediump float;
                 varying vec3 v_col;
                 void main() {
+                    // Simple flat color. 
+                    // The depth test handles the Voronoi logic.
                     gl_FragColor = vec4(v_col, 1.0);
                 }
             `;
 
-            // Compile
             const createShader = (type, src) => {
                 const s = gl.createShader(type);
                 gl.shaderSource(s, src);
@@ -584,26 +586,26 @@
             gl.linkProgram(p);
             glProgram = p;
 
-            // 2. Geometry: 4-Sided Pyramid (Triangle Fan)
-            // Center (0,0) -> Tip. Corners -> Base.
-            // This ensures |x|+|y| interpolates linearly in each quadrant.
+            // 2. Geometry: Rotated Pyramid (Diamond Base)
+            // Instead of a Square (1,1), we use a Diamond (0,1), (1,0)...
+            // This aligns the mesh edges with the Manhattan metric isolines.
             const geomData = new Float32Array([
                 0, 0,   // Center (Tip)
-                1, 1,   // TR
-                -1, 1,  // TL
-                -1, -1, // BL
-                1, -1,  // BR
-                1, 1    // TR (Close loop)
+                0, 1,   // Top
+                -1, 0,  // Left
+                0, -1,  // Bottom
+                1, 0,   // Right
+                0, 1    // Top (Close loop)
             ]);
 
             bufferInfo.geometry = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.geometry);
             gl.bufferData(gl.ARRAY_BUFFER, geomData, gl.STATIC_DRAW);
 
-            // Create buffers for instances (dynamic)
             bufferInfo.pos = gl.createBuffer();
             bufferInfo.col = gl.createBuffer();
         }
+
 
 
         function renderLoop() {
@@ -624,15 +626,14 @@
                 paintDirtyIdx.clear();
             }
 
-            // Draw Background (From WebGL Canvas or Vector Canvas)
+            // Draw Background
             if (useManhattan && glCanvas) {
                 ctx.drawImage(glCanvas, 0, 0, canvas.width, canvas.height);
             } else {
                 ctx.drawImage(vectorCanvas, 0, 0);
             }
 
-            // Draw Seeds (High-Res Vector Overlay)
-            // We draw this in JS so the text/dots are sharp and not aliased geometry
+            // Draw Seeds (Overlay)
             ctx.save();
             ctx.scale(scale, scale);
             drawSeeds(ctx);
@@ -739,7 +740,6 @@
         function renderManhattanWebGL() {
             if (!points.length) return;
 
-            // Resize WebGL canvas to match Screen Resolution (Full Res)
             if (glCanvas.width !== canvas.width || glCanvas.height !== canvas.height) {
                 glCanvas.width = canvas.width;
                 glCanvas.height = canvas.height;
@@ -748,68 +748,64 @@
 
             gl.useProgram(glProgram);
             gl.enable(gl.DEPTH_TEST);
-            gl.depthFunc(gl.LEQUAL); // Closest pyramid wins
+            gl.depthFunc(gl.LEQUAL);
             gl.clearColor(0.07, 0.07, 0.07, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            // 1. Prepare Instance Data
+            // Prepare Data
             const posData = new Float32Array(points.length * 2);
             const colData = new Float32Array(points.length * 3);
             
-            // Map types to RGB cache
             const rgbCache = {};
             for(let k in CELL_TYPES) rgbCache[CELL_TYPES[k].id] = CELL_TYPES[k].rgb.map(c => c/255);
 
             for (let i = 0; i < points.length; i++) {
                 posData[i*2] = points[i].x;
                 posData[i*2+1] = points[i].y;
-                
                 const c = rgbCache[points[i].typeId] || [0,0,0];
                 colData[i*3] = c[0];
                 colData[i*3+1] = c[1];
                 colData[i*3+2] = c[2];
             }
 
-            // 2. Bind Geometry (The Pyramid)
+            // Bind Attributes
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.geometry);
             const locGeom = gl.getAttribLocation(glProgram, 'a_geom');
             gl.enableVertexAttribArray(locGeom);
             gl.vertexAttribPointer(locGeom, 2, gl.FLOAT, false, 0, 0);
 
-            // 3. Bind Instances (Positions)
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.pos);
             gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
             const locPos = gl.getAttribLocation(glProgram, 'a_pos');
             gl.enableVertexAttribArray(locPos);
             gl.vertexAttribPointer(locPos, 2, gl.FLOAT, false, 0, 0);
-            ext.vertexAttribDivisorANGLE(locPos, 1); // 1 per instance
+            ext.vertexAttribDivisorANGLE(locPos, 1);
 
-            // 4. Bind Instances (Colors)
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.col);
             gl.bufferData(gl.ARRAY_BUFFER, colData, gl.DYNAMIC_DRAW);
             const locCol = gl.getAttribLocation(glProgram, 'a_col');
             gl.enableVertexAttribArray(locCol);
             gl.vertexAttribPointer(locCol, 3, gl.FLOAT, false, 0, 0);
-            ext.vertexAttribDivisorANGLE(locCol, 1); // 1 per instance
+            ext.vertexAttribDivisorANGLE(locCol, 1);
 
-            // 5. Uniforms
+            // Uniforms
             const locRes = gl.getUniformLocation(glProgram, 'u_res');
             const locScale = gl.getUniformLocation(glProgram, 'u_scale');
             
             gl.uniform2f(locRes, worldWidth, worldHeight);
-            // Pyramid must be large enough to reach corners. width+height covers it.
+            // With rotated geometry (diamond), the radius is L1 distance.
+            // width + height ensures coverage of the whole screen from any point.
             gl.uniform1f(locScale, worldWidth + worldHeight);
 
-            // 6. Draw Instanced
-            // 6 vertices per pyramid (Triangle Fan), N instances
+            // Draw
             ext.drawArraysInstancedANGLE(gl.TRIANGLE_FAN, 0, 6, points.length);
         }
 
 
 
+
         function drawSeeds(ctxToUse) {
-            ctxToUse.fillStyle = "rgba(0,0,0,0.5)"; 
-            // Draw slightly heavier dots for manhattan to act as visual centers
+            ctxToUse.fillStyle = "rgba(0,0,0,0.5)";
             ctxToUse.beginPath();
             for (let i = 0; i < points.length; i++) {
                 ctxToUse.moveTo(points[i].x + 0.15, points[i].y);
@@ -817,6 +813,7 @@
             }
             ctxToUse.fill();
         }
+
 
 
         // --- Import/Export ---

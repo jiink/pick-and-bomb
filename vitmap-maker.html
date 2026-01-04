@@ -248,6 +248,7 @@
             </div>
 
             <div class="panel-header" style="margin: 10px -10px 10px -10px;">Grid</div>
+            
             <div class="row">
                 <label>Size</label>
                 <input type="number" id="grid-size" value="16" onchange="editor.gridSize = parseInt(this.value); editor.render();">
@@ -255,6 +256,10 @@
             <div class="row">
                 <input type="checkbox" id="snap-check" checked onchange="editor.snapToGrid = this.checked">
                 <label for="snap-check">Snap to Grid</label>
+            </div>
+            <div class="row">
+                <input type="checkbox" id="ref-check" onchange="editor.showRefScale = this.checked; editor.render();">
+                <label for="ref-check">Show Scale Ref (16x16)</label>
             </div>
             
             <div class="panel-header" style="margin: 10px -10px 10px -10px;">Overlay</div>
@@ -579,6 +584,7 @@ const editor = {
     tool: 'select', 
     gridSize: 16,
     snapToGrid: true,
+    showRefScale: false,
     overlayImage: null,
     overlayOpacity: 0.3,
     overlayScale: 1.0,
@@ -712,23 +718,25 @@ const editor = {
     render() {
         ctx.fillStyle = "#121212"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         this.drawGrid();
-
-        if (this.overlayImage) {
-            ctx.save(); 
-            ctx.globalAlpha = this.overlayOpacity;
+        if (this.showRefScale) {
+            ctx.save();
+            const topLeft = this.worldToScreen(-8, -16);
+            const dim = 16 * this.camera.zoom;
             
-            // Calculate screen position based on world coordinates (overlayX, overlayY)
-            const screenPos = this.worldToScreen(this.overlayX, this.overlayY); 
+            ctx.strokeStyle = "#00ff00"; // Bright green
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]); // Dashed line
+            ctx.strokeRect(topLeft.x, topLeft.y, dim, dim);
             
-            // Calculate dimensions based on scale
-            const w = this.overlayImage.width * (this.camera.zoom / this.gridSize) * this.overlayScale; 
-            const h = this.overlayImage.height * (this.camera.zoom / this.gridSize) * this.overlayScale;
-            
-            ctx.drawImage(this.overlayImage, screenPos.x - w/2, screenPos.y - h/2, w, h);
+            // Optional: Draw a small X at origin to be clear
+            const origin = this.worldToScreen(0, 0);
+            ctx.fillStyle = "#00ff00";
+            ctx.fillRect(origin.x - 2, origin.y - 2, 4, 4);
             ctx.restore();
         }
 
-        // ... (Keep the rest of the render function exactly as it was) ...
+
+        
         if (this.onionSkin && this.currentFrameIndex > 0) {
             const prevFrame = project.getCurrentAction().frames[this.currentFrameIndex - 1];
             this.drawFrame(prevFrame, 0.3);
@@ -756,6 +764,22 @@ const editor = {
                 ctx.strokeStyle = "#00aaff"; ctx.lineWidth = 1; ctx.setLineDash([5, 5]); ctx.stroke(); ctx.setLineDash([]);
             }
         }
+
+        if (this.overlayImage) {
+            ctx.save(); 
+            ctx.globalAlpha = this.overlayOpacity;
+            
+            // Calculate screen position based on world coordinates (overlayX, overlayY)
+            const screenPos = this.worldToScreen(this.overlayX, this.overlayY); 
+            
+            // Calculate dimensions based on scale
+            const w = this.overlayImage.width * (this.camera.zoom / this.gridSize) * this.overlayScale; 
+            const h = this.overlayImage.height * (this.camera.zoom / this.gridSize) * this.overlayScale;
+            
+            ctx.drawImage(this.overlayImage, screenPos.x - w/2, screenPos.y - h/2, w, h);
+            ctx.restore();
+        }
+
 
         if (this.tool === 'select') {
             this.selectedShapes.forEach(shape => {

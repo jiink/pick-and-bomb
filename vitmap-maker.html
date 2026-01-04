@@ -640,7 +640,9 @@ const editor = {
         const alpha = parseInt(document.getElementById('alpha-slider').value);
         const col = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
         
-        if (this.selectedShapes.length > 0) {
+        // CHANGE: Only apply color to existing selection if using the SELECT tool.
+        // In DRAW tool, picking a color should only affect the brush (inputs) for the next shape.
+        if (this.tool === 'select' && this.selectedShapes.length > 0) {
             this.selectedShapes.forEach(s => s.color = {...col});
             project.isDirty = true;
             this.render();
@@ -649,13 +651,15 @@ const editor = {
     },
 
     setAlpha(val) {
-        if (this.selectedShapes.length > 0) {
+        // CHANGE: Same logic for Alpha. Only update shape if in SELECT tool.
+        if (this.tool === 'select' && this.selectedShapes.length > 0) {
             this.selectedShapes.forEach(s => s.color.a = parseInt(val));
             project.isDirty = true;
             this.render();
             project.refreshUI(); 
         }
     },
+
 
     deleteSelectedShape() {
         if (this.selectedShapes.length === 0) return;

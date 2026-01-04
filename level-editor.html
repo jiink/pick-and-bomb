@@ -101,17 +101,19 @@
             </label>
         </div>
 
-        <div class="control-group">
-            <label>Tool Mode</label>
-            <div class="mode-switch">
-                <div class="mode-opt active" id="mode-place" onclick="setMode('PLACE')">Place</div>
-                <div class="mode-opt" id="mode-paint" onclick="setMode('PAINT')">Paint</div>
-                <div class="mode-opt" id="mode-nudge" onclick="setMode('NUDGE')">Nudge</div>
-            </div>
-            <div style="margin-top:5px; font-size: 0.75rem; color:#777; max-width: 150px; text-align:center; min-height:1.2em;">
-                <span id="mode-desc">Click to add points.</span>
-            </div>
-        </div>
+       <div class="control-group">
+    <label>Tool Mode</label>
+    <div class="mode-switch">
+        <div class="mode-opt active" id="mode-place" onclick="setMode('PLACE')">Place</div>
+        <div class="mode-opt" id="mode-paint" onclick="setMode('PAINT')">Paint</div>
+        <div class="mode-opt" id="mode-nudge" onclick="setMode('NUDGE')">Nudge</div>
+        <!-- NEW BUTTON HERE -->
+        <div class="mode-opt" id="mode-relax" onclick="setMode('RELAX')">Relax</div>
+    </div>
+    <div style="margin-top:5px; font-size: 0.75rem; color:#777; max-width: 150px; text-align:center; min-height:1.2em;">
+        <span id="mode-desc">Click to add points.</span>
+    </div>
+</div>
 
         <div class="control-group">
             <label>Brush Size</label>
@@ -300,15 +302,17 @@
         }
 
         function setMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
-            document.getElementById('mode-' + mode.toLowerCase()).classList.add('active');
-            
-            const desc = document.getElementById('mode-desc');
-            if(mode === 'PLACE') desc.innerText = "Click to add (Single).";
-            else if(mode === 'PAINT') desc.innerText = "Recolor in radius.";
-            else if(mode === 'NUDGE') desc.innerText = "Push cells in radius.";
-        }
+    currentMode = mode;
+    document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
+    document.getElementById('mode-' + mode.toLowerCase()).classList.add('active');
+    
+    const desc = document.getElementById('mode-desc');
+    if(mode === 'PLACE') desc.innerText = "Click to add (Single).";
+    else if(mode === 'PAINT') desc.innerText = "Recolor in radius.";
+    else if(mode === 'NUDGE') desc.innerText = "Push cells in radius.";
+    else if(mode === 'RELAX') desc.innerText = "Smooths distribution."; // New Desc
+}
+
 
         function updateBrush(val) {
             brushRadius = parseFloat(val);
@@ -435,6 +439,48 @@
                 }
                 if (modified) geometryDirty = true;
             }
+
+            if (currentMode === 'RELAX') {
+        if (points.length === 0 || !voronoi) return;
+        let modified = false;
+        const relaxStrength = 0.1; // 0.1 = gentle smoothing, 1.0 = instant snap to center
+
+        for(let i=0; i<points.length; i++) {
+            // Only affect points in brush
+            if (checkDistance(points[i], wx, wy, brushRadius)) {
+                const poly = voronoi.cellPolygon(i);
+                if (!poly || poly.length < 3) continue;
+
+                // Calculate Centroid of the polygon (Geometric center)
+                let cx = 0, cy = 0, area = 0;
+                for (let j = 0; j < poly.length - 1; j++) {
+                    const x0 = poly[j][0], y0 = poly[j][1];
+                    const x1 = poly[j+1][0], y1 = poly[j+1][1];
+                    const cross = x0 * y1 - x1 * y0;
+                    area += cross;
+                    cx += (x0 + x1) * cross;
+                    cy += (y0 + y1) * cross;
+                }
+                area *= 0.5;
+                if (Math.abs(area) < 0.0001) continue; // Degenerate cell
+                
+                cx = cx / (6 * area);
+                cy = cy / (6 * area);
+
+                // Move point towards centroid
+                points[i].x += (cx - points[i].x) * relaxStrength;
+                points[i].y += (cy - points[i].y) * relaxStrength;
+                
+                // Clamp bounds
+                points[i].x = Math.max(0.1, Math.min(worldWidth - 0.1, points[i].x));
+                points[i].y = Math.max(0.1, Math.min(worldHeight - 0.1, points[i].y));
+                
+                modified = true;
+            }
+        }
+        if (modified) geometryDirty = true;
+    }
+
         }
 
         // --- Generation ---
@@ -649,44 +695,50 @@
 
 
         function drawCursor(wx, wy) {
-            ctx.save();
-            ctx.scale(scale, scale);
-            ctx.translate(wx, wy);
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.translate(wx, wy);
 
-            ctx.beginPath();
-            if (useManhattan) {
-                ctx.moveTo(0, -brushRadius);
-                ctx.lineTo(brushRadius, 0);
-                ctx.lineTo(0, brushRadius);
-                ctx.lineTo(-brushRadius, 0);
-                ctx.closePath();
-            } else {
-                ctx.arc(0, 0, brushRadius, 0, Math.PI * 2);
-            }
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-            ctx.lineWidth = 2 / scale;
-            ctx.stroke();
+    ctx.beginPath();
+    if (useManhattan) {
+        ctx.moveTo(0, -brushRadius);
+        ctx.lineTo(brushRadius, 0);
+        ctx.lineTo(0, brushRadius);
+        ctx.lineTo(-brushRadius, 0);
+        ctx.closePath();
+    } else {
+        ctx.arc(0, 0, brushRadius, 0, Math.PI * 2);
+    }
+    
+    // Choose Color based on Mode
+    if (currentMode === 'RELAX') {
+        ctx.strokeStyle = "rgba(100, 255, 100, 0.9)"; // Green for Relax
+        ctx.fillStyle = "rgba(100, 255, 100, 0.1)";
+    } else if (currentMode === 'PAINT' && selectedType.id === -1) {
+        ctx.strokeStyle = "rgba(255, 100, 100, 0.9)"; // Red for Delete
+        ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
+    } else {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)"; // Default
+        ctx.fillStyle = "transparent";
+    }
 
-            ctx.beginPath();
-            ctx.arc(0, 0, 0.2, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(255, 255, 255, 1)";
-            ctx.fill();
-            
-            if (currentMode === 'PAINT' && selectedType.id === -1) {
-                ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
-                ctx.beginPath();
-                if (useManhattan) {
-                    ctx.moveTo(0, -brushRadius);
-                    ctx.lineTo(brushRadius, 0);
-                    ctx.lineTo(0, brushRadius);
-                    ctx.lineTo(-brushRadius, 0);
-                } else {
-                    ctx.arc(0, 0, brushRadius, 0, Math.PI * 2);
-                }
-                ctx.fill();
-            }
-            ctx.restore();
-        }
+    ctx.lineWidth = 2 / scale;
+    ctx.stroke();
+    
+    // Fill the brush area lightly if Relax or Delete
+    if (currentMode === 'RELAX' || (currentMode === 'PAINT' && selectedType.id === -1)) {
+        ctx.fill();
+    }
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 1)";
+    ctx.fill();
+    
+    ctx.restore();
+}
+
 
         // --- Euclidean Render (Vector Based - Fast via D3) ---
         function renderEuclideanFull() {

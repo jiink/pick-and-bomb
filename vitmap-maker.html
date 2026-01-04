@@ -342,10 +342,12 @@ const ctx = canvas.getContext('2d');
 const project = {
     actions: [],
     currentActionIndex: 0,
+    isDirty: false, // New: Track unsaved changes
     
     init() {
         this.actions = [new Action("Idle")];
         this.currentActionIndex = 0;
+        this.isDirty = false;
         this.refreshUI();
     },
 
@@ -364,21 +366,29 @@ const project = {
         this.actions.push(new Action(name));
         this.currentActionIndex = this.actions.length - 1;
         editor.currentFrameIndex = 0;
+        editor.selectedShape = null; // Clear selection
         nameInput.value = "";
+        this.isDirty = true; // Mark as changed
         this.refreshUI();
+        editor.render();
     },
 
     selectAction(index) {
         this.currentActionIndex = index;
         editor.currentFrameIndex = 0;
+        editor.selectedShape = null; // Fix Bug 1: Deselect on action change
         this.refreshUI();
+        editor.render();
     },
 
     addFrame() {
         const action = this.getCurrentAction();
         action.frames.push(new Frame());
         editor.currentFrameIndex = action.frames.length - 1;
+        editor.selectedShape = null; // Fix Bug 1: Deselect
+        this.isDirty = true;
         this.refreshUI();
+        editor.render(); // Fix Bug 2: Force visual refresh
     },
 
     duplicateFrame() {
@@ -390,7 +400,10 @@ const project = {
         
         action.frames.splice(editor.currentFrameIndex + 1, 0, newFrame);
         editor.currentFrameIndex++;
+        editor.selectedShape = null; // Fix Bug 1
+        this.isDirty = true;
         this.refreshUI();
+        editor.render(); // Fix Bug 2
     },
 
     deleteFrame() {
@@ -400,7 +413,10 @@ const project = {
         if (editor.currentFrameIndex >= action.frames.length) {
             editor.currentFrameIndex = action.frames.length - 1;
         }
+        editor.selectedShape = null; // Fix Bug 1
+        this.isDirty = true;
         this.refreshUI();
+        editor.render(); // Fix Bug 2
     },
 
     saveToJSON() {
@@ -414,6 +430,7 @@ const project = {
         a.href = url;
         a.download = "animation.json";
         a.click();
+        this.isDirty = false; // Reset warning
     },
 
     loadFromJSON(input) {
@@ -427,7 +444,10 @@ const project = {
                     this.actions = data.actions;
                     this.currentActionIndex = 0;
                     editor.currentFrameIndex = 0;
+                    editor.selectedShape = null;
+                    this.isDirty = false; // Reset warning on fresh load
                     this.refreshUI();
+                    editor.render();
                 } else {
                     alert("Invalid JSON format");
                 }
@@ -458,7 +478,12 @@ const project = {
             const div = document.createElement('div');
             div.className = `frame ${idx === editor.currentFrameIndex ? 'active' : ''}`;
             div.innerText = idx + 1;
-            div.onclick = () => { editor.currentFrameIndex = idx; editor.render(); project.refreshUI(); };
+            div.onclick = () => { 
+                editor.currentFrameIndex = idx; 
+                editor.selectedShape = null; // Fix Bug 1: Deselect when clicking specific frame
+                editor.render(); 
+                project.refreshUI(); 
+            };
             frameCont.appendChild(div);
         });
 
@@ -557,6 +582,7 @@ const editor = {
         
         if (this.selectedShape) {
             this.selectedShape.color = col;
+            project.isDirty = true; // Mark change
             this.render();
             project.refreshUI();
         }
@@ -565,8 +591,9 @@ const editor = {
     setAlpha(val) {
         if (this.selectedShape) {
             this.selectedShape.color.a = parseInt(val);
+            project.isDirty = true; // Mark change
             this.render();
-            project.refreshUI(); // Update layer preview
+            project.refreshUI(); 
         }
     },
 
@@ -577,10 +604,12 @@ const editor = {
         if (idx > -1) {
             frame.shapes.splice(idx, 1);
             this.selectedShape = null;
+            project.isDirty = true; // Mark change
             this.render();
             project.refreshUI();
         }
     },
+
 
     moveShapeOrder(dir) {
         if (!this.selectedShape) return;
@@ -592,10 +621,12 @@ const editor = {
         if (newIdx >= 0 && newIdx < frame.shapes.length) {
             // Swap
             [frame.shapes[idx], frame.shapes[newIdx]] = [frame.shapes[newIdx], frame.shapes[idx]];
+            project.isDirty = true; // Mark change
             this.render();
             project.refreshUI();
         }
     },
+
 
     togglePlay() {
         this.isPlaying = !this.isPlaying;
@@ -856,7 +887,6 @@ canvas.addEventListener('mousedown', (e) => {
     const snapPos = { x: editor.snap(worldPos.x), y: editor.snap(worldPos.y) };
 
     if (editor.tool === 'select') {
-        // ... (Keep existing selection logic here, no changes needed for select tool) ...
         if (editor.selectedShape) {
             for (let i = 0; i < editor.selectedShape.points.length; i++) {
                 const pt = editor.selectedShape.points[i];
@@ -897,7 +927,7 @@ canvas.addEventListener('mousedown', (e) => {
             if (!editor.drawingShape) {
                 // START NEW SHAPE
                 editor.drawingShape = new Shape();
-                editor.drawingShape.closed = false; // Initially open
+                editor.drawingShape.closed = false; 
                 editor.drawingShape.points.push(snapPos);
                 
                 const hex = document.getElementById('color-picker').value;
@@ -906,9 +936,7 @@ canvas.addEventListener('mousedown', (e) => {
                 editor.drawingShape.color = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
             } else {
                 // CONTINUE DRAWING
-                // Check if clicking near the start point to CLOSE LOOP
                 const startPt = editor.drawingShape.points[0];
-                // Check if snapped position matches start position
                 if (editor.drawingShape.points.length >= 2 && 
                     snapPos.x === startPt.x && snapPos.y === startPt.y) {
                     
@@ -916,18 +944,18 @@ canvas.addEventListener('mousedown', (e) => {
                     editor.drawingShape.closed = true;
                     project.getCurrentFrame().shapes.push(editor.drawingShape);
                     editor.selectedShape = editor.drawingShape;
-                    editor.drawingShape = null; // Clear pending shape
+                    editor.drawingShape = null; 
+                    project.isDirty = true; // Mark as changed
                     project.refreshUI();
                 } else {
-                    // Just add a new point
                     editor.drawingShape.points.push(snapPos);
                 }
             }
             editor.render();
         } 
-        // Right click does nothing (per requirement)
     }
 });
+
 
 canvas.addEventListener('mousemove', (e) => {
     const pos = getMousePos(e);
@@ -974,9 +1002,14 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('mouseup', () => {
+    // If we were dragging a shape/point, the project is now dirty
+    if (editor.isDragging) {
+        project.isDirty = true;
+    }
     editor.isDragging = false;
     editor.isPanning = false;
 });
+
 
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -1001,7 +1034,7 @@ window.addEventListener('keydown', (e) => {
     // ESCAPE: Cancel drawing
     if (e.key === 'Escape') {
         if (editor.tool === 'draw' && editor.drawingShape) {
-            editor.drawingShape = null; // Discard whole shape
+            editor.drawingShape = null; 
             editor.render();
         } else if (editor.tool === 'select') {
             editor.selectedShape = null;
@@ -1014,9 +1047,7 @@ window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (editor.tool === 'draw' && editor.drawingShape) {
             e.preventDefault();
-            // Remove last point
             editor.drawingShape.points.pop();
-            // If no points left, cancel shape
             if (editor.drawingShape.points.length === 0) {
                 editor.drawingShape = null;
             }
@@ -1030,6 +1061,7 @@ window.addEventListener('keydown', (e) => {
             if (editor.selectedPointIndex !== -1 && editor.selectedShape.points.length > 3) {
                 editor.selectedShape.points.splice(editor.selectedPointIndex, 1);
                 editor.selectedPointIndex = -1;
+                project.isDirty = true;
                 editor.render();
             } else {
                 editor.deleteSelectedShape();
@@ -1039,12 +1071,18 @@ window.addEventListener('keydown', (e) => {
     
     if (e.key === ' ') {
         editor.togglePlay();
+        e.preventDefault(); // Prevent scroll
     }
-    if (e.key === 's') editor.setTool('select');
-    if (e.key === 'd') editor.setTool('draw');
+    
+    // Tools
+    if (e.key === 's' || e.key === '1') editor.setTool('select');
+    if (e.key === 'd' || e.key === '2') editor.setTool('draw');
+
+    // Frames
     if (e.key === 'ArrowLeft') {
         if(editor.currentFrameIndex > 0) {
             editor.currentFrameIndex--; 
+            editor.selectedShape = null; // Fix Bug 1
             editor.render(); project.refreshUI();
         }
     }
@@ -1052,10 +1090,12 @@ window.addEventListener('keydown', (e) => {
         const act = project.getCurrentAction();
         if(editor.currentFrameIndex < act.frames.length - 1) {
             editor.currentFrameIndex++;
+            editor.selectedShape = null; // Fix Bug 1
             editor.render(); project.refreshUI();
         }
     }
 });
+
 
 // Drag and Drop Image Overlay
 canvas.addEventListener('dragover', (e) => e.preventDefault());
@@ -1105,6 +1145,14 @@ function pointInPoly(pt, vs) {
     }
     return inside;
 }
+
+window.onbeforeunload = (e) => {
+    if (project.isDirty) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Are you sure you want to exit?";
+        return e.returnValue;
+    }
+};
 
 // Initialize
 project.init();

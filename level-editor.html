@@ -513,11 +513,109 @@
         }
 
         // --- Render System ---
+
+        let glCanvas = document.createElement('canvas');
+        let gl = null;
+        let ext = null; // Instancing extension
+        let glProgram = null;
+        let bufferInfo = { pos: null, col: null, geometry: null };
+
+        // --- Init WebGL ---
+        function initGL() {
+            gl = glCanvas.getContext('webgl', { alpha: false, depth: true, antialias: false });
+            if (!gl) return alert("WebGL not supported");
+            
+            ext = gl.getExtension('ANGLE_instanced_arrays');
+            if (!ext) return alert("WebGL Instancing not supported");
+
+            // 1. Shaders: Manhattan Distance = Z-Depth
+            const vs = `
+                attribute vec2 a_geom;  // Pyramid geometry (local)
+                attribute vec2 a_pos;   // Instance Position (seed x,y)
+                attribute vec3 a_col;   // Instance Color (rgb)
+                
+                varying vec3 v_col;
+                
+                uniform vec2 u_res;     // Canvas Resolution
+                uniform float u_scale;  // Max size of pyramid base
+
+                void main() {
+                    v_col = a_col;
+                    
+                    // 1. Calculate World Position of this vertex
+                    // The geometry is a unit pyramid, we scale it huge to cover screen
+                    vec2 worldPos = a_pos + (a_geom * u_scale);
+
+                    // 2. Calculate Manhattan Distance (L1)
+                    // This becomes our Z-depth. Closer = Smaller Z.
+                    float dist = abs(worldPos.x - a_pos.x) + abs(worldPos.y - a_pos.y);
+
+                    // 3. Normalize Z for Depth Buffer (0.0 to 1.0)
+                    // Divide by u_scale to keep it in range
+                    float z = dist / u_scale;
+
+                    // 4. Map World (0..W, 0..H) to Clip Space (-1..1, 1..-1)
+                    vec2 clip = (worldPos / u_res) * 2.0 - 1.0;
+                    clip.y *= -1.0; // Flip Y for WebGL
+
+                    gl_Position = vec4(clip, z, 1.0);
+                }
+            `;
+
+            const fs = `
+                precision mediump float;
+                varying vec3 v_col;
+                void main() {
+                    gl_FragColor = vec4(v_col, 1.0);
+                }
+            `;
+
+            // Compile
+            const createShader = (type, src) => {
+                const s = gl.createShader(type);
+                gl.shaderSource(s, src);
+                gl.compileShader(s);
+                if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s);
+                return s;
+            };
+            const p = gl.createProgram();
+            gl.attachShader(p, createShader(gl.VERTEX_SHADER, vs));
+            gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fs));
+            gl.linkProgram(p);
+            glProgram = p;
+
+            // 2. Geometry: 4-Sided Pyramid (Triangle Fan)
+            // Center (0,0) -> Tip. Corners -> Base.
+            // This ensures |x|+|y| interpolates linearly in each quadrant.
+            const geomData = new Float32Array([
+                0, 0,   // Center (Tip)
+                1, 1,   // TR
+                -1, 1,  // TL
+                -1, -1, // BL
+                1, -1,  // BR
+                1, 1    // TR (Close loop)
+            ]);
+
+            bufferInfo.geometry = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.geometry);
+            gl.bufferData(gl.ARRAY_BUFFER, geomData, gl.STATIC_DRAW);
+
+            // Create buffers for instances (dynamic)
+            bufferInfo.pos = gl.createBuffer();
+            bufferInfo.col = gl.createBuffer();
+        }
+
+
         function renderLoop() {
             if (geometryDirty) {
                 recomputeGeometry();
-                if (useManhattan) renderManhattanOptimized();
-                else renderEuclideanFull();
+                
+                if (useManhattan) {
+                    if (!gl) initGL();
+                    renderManhattanWebGL();
+                } else {
+                    renderEuclideanFull();
+                }
                 
                 geometryDirty = false;
                 paintDirtyIdx.clear();
@@ -526,30 +624,27 @@
                 paintDirtyIdx.clear();
             }
 
-            // 1. Draw Background (Map)
-            if(useManhattan) {
-                // Draw pixelated raster buffer scaled up
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(rasterCanvas, 0, 0, canvas.width, canvas.height);
+            // Draw Background (From WebGL Canvas or Vector Canvas)
+            if (useManhattan && glCanvas) {
+                ctx.drawImage(glCanvas, 0, 0, canvas.width, canvas.height);
             } else {
-                ctx.imageSmoothingEnabled = true; // Smooth vectors
                 ctx.drawImage(vectorCanvas, 0, 0);
             }
 
-            // 2. Draw Seeds (Always sharp, on top of map)
-            // We pass 'ctx' (main canvas) so points are high-res
+            // Draw Seeds (High-Res Vector Overlay)
+            // We draw this in JS so the text/dots are sharp and not aliased geometry
             ctx.save();
             ctx.scale(scale, scale);
-            drawSeeds(ctx); 
+            drawSeeds(ctx);
             ctx.restore();
 
-            // 3. Draw UI Cursor
             if (isCursorInCanvas && lastMouseX !== null) {
                 drawCursor(lastMouseX, lastMouseY);
             }
 
             requestAnimationFrame(renderLoop);
         }
+
 
 
         function drawCursor(wx, wy) {
@@ -641,115 +736,82 @@
             vectorCtx.restore();
         }
 
-        // --- Manhattan Render (Optimized Low-Res Raster) ---
-        function renderManhattanOptimized() {
-            if (!points.length || !delaunay) return;
+        function renderManhattanWebGL() {
+            if (!points.length) return;
 
-            // Cap resolution at 600px max dimension. 
-            // 600x600 = 360k pixels. Fast enough for JS, detailed enough for editing.
-            const MAX_RES = 600; 
-            
-            let rW = worldWidth, rH = worldHeight;
-            const aspect = worldWidth / worldHeight;
-            
-            // Scaling logic
-            if (worldWidth < MAX_RES && worldHeight < MAX_RES) {
-                // Supersample small worlds for cleaner diagonals
-                const mult = Math.min(Math.floor(MAX_RES/Math.max(worldWidth, worldHeight)), 4);
-                rW = worldWidth * mult;
-                rH = worldHeight * mult;
-            } else {
-                if(rW > MAX_RES) { rW = MAX_RES; rH = rW / aspect; }
-                if(rH > MAX_RES) { rH = MAX_RES; rW = rH * aspect; }
-            }
-            
-            rW = Math.floor(rW); rH = Math.floor(rH);
-            
-            if (rasterCanvas.width !== rW || rasterCanvas.height !== rH) {
-                rasterCanvas.width = rW;
-                rasterCanvas.height = rH;
+            // Resize WebGL canvas to match Screen Resolution (Full Res)
+            if (glCanvas.width !== canvas.width || glCanvas.height !== canvas.height) {
+                glCanvas.width = canvas.width;
+                glCanvas.height = canvas.height;
+                gl.viewport(0, 0, glCanvas.width, glCanvas.height);
             }
 
-            const imgData = rasterCtx.getImageData(0, 0, rW, rH);
-            const data = imgData.data;
-            const colorMap = {};
-            for(let k in CELL_TYPES) colorMap[CELL_TYPES[k].id] = CELL_TYPES[k].rgb;
+            gl.useProgram(glProgram);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL); // Closest pyramid wins
+            gl.clearColor(0.07, 0.07, 0.07, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            const invScaleX = worldWidth / rW;
-            const invScaleY = worldHeight / rH;
-
-            // Buffer to store indices of the previous row for vertical edge detection
-            const rowIndices = new Int32Array(rW).fill(-1);
+            // 1. Prepare Instance Data
+            const posData = new Float32Array(points.length * 2);
+            const colData = new Float32Array(points.length * 3);
             
-            let bestIdx = 0;
+            // Map types to RGB cache
+            const rgbCache = {};
+            for(let k in CELL_TYPES) rgbCache[CELL_TYPES[k].id] = CELL_TYPES[k].rgb.map(c => c/255);
 
-            for (let y = 0; y < rH; y++) {
-                // Reset search heuristic at start of row
-                bestIdx = delaunay.find(0, y * invScaleY, bestIdx);
-                let prevIdx = -1; // For horizontal edge detection
-
-                for (let x = 0; x < rW; x++) {
-                    const wx = x * invScaleX;
-                    const wy = y * invScaleY;
-
-                    // Periodic re-sync with Euclidean graph prevents getting stuck in local minima
-                    if(x % 20 === 0) bestIdx = delaunay.find(wx, wy, bestIdx);
-
-                    let bestDist = Math.abs(points[bestIdx].x - wx) + Math.abs(points[bestIdx].y - wy);
-                    
-                    // Hill Climb (find true Manhattan neighbor)
-                    let changed = true;
-                    let iter = 0;
-                    while(changed && iter++ < 8) {
-                        changed = false;
-                        const neighbors = voronoi.neighbors(bestIdx);
-                        for (const nIdx of neighbors) {
-                            const d = Math.abs(points[nIdx].x - wx) + Math.abs(points[nIdx].y - wy);
-                            if (d < bestDist) {
-                                bestDist = d;
-                                bestIdx = nIdx;
-                                changed = true;
-                            }
-                        }
-                    }
-
-                    // --- Edge Detection ---
-                    let isEdge = false;
-                    // Check Left
-                    if (x > 0 && bestIdx !== prevIdx) isEdge = true;
-                    // Check Up
-                    if (y > 0 && bestIdx !== rowIndices[x]) isEdge = true;
-
-                    // Update buffers
-                    prevIdx = bestIdx;
-                    rowIndices[x] = bestIdx;
-
-                    const px = (y * rW + x) * 4;
-
-                    if (isEdge) {
-                        // Draw Black Outline
-                        data[px] = 0; data[px+1] = 0; data[px+2] = 0; data[px+3] = 255;
-                    } else {
-                        // Draw Cell Color
-                        const rgb = colorMap[points[bestIdx].typeId] || [0,0,0];
-                        data[px] = rgb[0];
-                        data[px+1] = rgb[1];
-                        data[px+2] = rgb[2];
-                        data[px+3] = 255;
-                    }
-                }
+            for (let i = 0; i < points.length; i++) {
+                posData[i*2] = points[i].x;
+                posData[i*2+1] = points[i].y;
+                
+                const c = rgbCache[points[i].typeId] || [0,0,0];
+                colData[i*3] = c[0];
+                colData[i*3+1] = c[1];
+                colData[i*3+2] = c[2];
             }
 
-            rasterCtx.putImageData(imgData, 0, 0);
+            // 2. Bind Geometry (The Pyramid)
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.geometry);
+            const locGeom = gl.getAttribLocation(glProgram, 'a_geom');
+            gl.enableVertexAttribArray(locGeom);
+            gl.vertexAttribPointer(locGeom, 2, gl.FLOAT, false, 0, 0);
+
+            // 3. Bind Instances (Positions)
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.pos);
+            gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
+            const locPos = gl.getAttribLocation(glProgram, 'a_pos');
+            gl.enableVertexAttribArray(locPos);
+            gl.vertexAttribPointer(locPos, 2, gl.FLOAT, false, 0, 0);
+            ext.vertexAttribDivisorANGLE(locPos, 1); // 1 per instance
+
+            // 4. Bind Instances (Colors)
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.col);
+            gl.bufferData(gl.ARRAY_BUFFER, colData, gl.DYNAMIC_DRAW);
+            const locCol = gl.getAttribLocation(glProgram, 'a_col');
+            gl.enableVertexAttribArray(locCol);
+            gl.vertexAttribPointer(locCol, 3, gl.FLOAT, false, 0, 0);
+            ext.vertexAttribDivisorANGLE(locCol, 1); // 1 per instance
+
+            // 5. Uniforms
+            const locRes = gl.getUniformLocation(glProgram, 'u_res');
+            const locScale = gl.getUniformLocation(glProgram, 'u_scale');
+            
+            gl.uniform2f(locRes, worldWidth, worldHeight);
+            // Pyramid must be large enough to reach corners. width+height covers it.
+            gl.uniform1f(locScale, worldWidth + worldHeight);
+
+            // 6. Draw Instanced
+            // 6 vertices per pyramid (Triangle Fan), N instances
+            ext.drawArraysInstancedANGLE(gl.TRIANGLE_FAN, 0, 6, points.length);
         }
 
 
+
         function drawSeeds(ctxToUse) {
-            // Draws sharp vector points on top of the map
-            ctxToUse.fillStyle = "rgba(0,0,0,0.4)";
+            ctxToUse.fillStyle = "rgba(0,0,0,0.5)"; 
+            // Draw slightly heavier dots for manhattan to act as visual centers
             ctxToUse.beginPath();
             for (let i = 0; i < points.length; i++) {
-                // Move slightly to center the pixel
                 ctxToUse.moveTo(points[i].x + 0.15, points[i].y);
                 ctxToUse.arc(points[i].x, points[i].y, 0.15, 0, Math.PI * 2);
             }

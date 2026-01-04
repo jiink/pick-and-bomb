@@ -740,6 +740,7 @@
         function renderManhattanWebGL() {
             if (!points.length) return;
 
+            // Ensure WebGL canvas matches screen resolution
             if (glCanvas.width !== canvas.width || glCanvas.height !== canvas.height) {
                 glCanvas.width = canvas.width;
                 glCanvas.height = canvas.height;
@@ -752,23 +753,33 @@
             gl.clearColor(0.07, 0.07, 0.07, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            // Prepare Data
+            // 1. Prepare Data
             const posData = new Float32Array(points.length * 2);
             const colData = new Float32Array(points.length * 3);
             
             const rgbCache = {};
+            // Pre-calculate base float colors
             for(let k in CELL_TYPES) rgbCache[CELL_TYPES[k].id] = CELL_TYPES[k].rgb.map(c => c/255);
 
             for (let i = 0; i < points.length; i++) {
                 posData[i*2] = points[i].x;
                 posData[i*2+1] = points[i].y;
-                const c = rgbCache[points[i].typeId] || [0,0,0];
-                colData[i*3] = c[0];
-                colData[i*3+1] = c[1];
-                colData[i*3+2] = c[2];
+                
+                const baseColor = rgbCache[points[i].typeId] || [0,0,0];
+
+                // 2. Apply Deterministic Jitter
+                // We use a simple math hash on the index 'i' so the color stays 
+                // exactly the same every frame, but differs between neighbors.
+                // Range: -0.04 to +0.04 (Subtle variation)
+                const hash = Math.sin(i * 12.9898 + i * 78.233) * 43758.5453;
+                const noise = (hash - Math.floor(hash)) * 0.08 - 0.04;
+
+                colData[i*3]   = Math.max(0, Math.min(1, baseColor[0] + noise));
+                colData[i*3+1] = Math.max(0, Math.min(1, baseColor[1] + noise));
+                colData[i*3+2] = Math.max(0, Math.min(1, baseColor[2] + noise));
             }
 
-            // Bind Attributes
+            // 3. Bind Attributes & Draw
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferInfo.geometry);
             const locGeom = gl.getAttribLocation(glProgram, 'a_geom');
             gl.enableVertexAttribArray(locGeom);
@@ -793,14 +804,11 @@
             const locScale = gl.getUniformLocation(glProgram, 'u_scale');
             
             gl.uniform2f(locRes, worldWidth, worldHeight);
-            // With rotated geometry (diamond), the radius is L1 distance.
-            // width + height ensures coverage of the whole screen from any point.
             gl.uniform1f(locScale, worldWidth + worldHeight);
 
             // Draw
             ext.drawArraysInstancedANGLE(gl.TRIANGLE_FAN, 0, 6, points.length);
         }
-
 
 
 

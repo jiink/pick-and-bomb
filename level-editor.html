@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voronoi Level Editor</title>
+    <title>Voronoi Level Editor v2.2</title>
     <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
     <style>
         :root { --bg: #1e1e1e; --panel: #2d2d2d; --accent: #4a90e2; --text: #eee; }
@@ -21,6 +21,11 @@
         /* Range Slider Styling */
         input[type="range"] { accent-color: var(--accent); cursor: pointer; }
         .val-disp { font-family: monospace; font-size: 0.9rem; color: var(--accent); align-self: center; }
+
+        /* Checkbox styling */
+        .checkbox-wrapper { display: flex; align-items: center; gap: 8px; margin-top: 5px; cursor: pointer; user-select: none; }
+        .checkbox-wrapper input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+        .checkbox-wrapper span { font-size: 0.85rem; color: #ccc; }
 
         button { background: #444; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; font-weight: 600; transition: background 0.2s; }
         button:hover { background: #555; }
@@ -87,6 +92,14 @@
                 <button onclick="resizeWorld()">Set</button>
             </div>
         </div>
+        
+        <div class="control-group">
+            <label>Metric</label>
+            <label class="checkbox-wrapper" title="Switches between Euclidean (Circles) and Manhattan (Diamonds)">
+                <input type="checkbox" id="manhattanToggle" onchange="toggleMetric()">
+                <span>Manhattan</span>
+            </label>
+        </div>
 
         <div class="control-group">
             <label>Tool Mode</label>
@@ -122,7 +135,7 @@
             </div>
         </div>
 
-        <!-- NEW NOISE CONTROLS -->
+        <!-- RESTORED NOISE CONTROLS -->
         <div class="control-group">
             <label>Noise (Dirt->Stone)</label>
             <div class="row">
@@ -144,8 +157,8 @@
                 <button class="danger" onclick="clearMap()">Clear</button>
                 <button class="primary" onclick="generateCode()">Get Text</button>
                 <input type="file" id="fileInput" accept=".vlvl" style="display:none" onchange="importBinary(this)">
-                <button class="primary" style="background:#8e44ad;" onclick="document.getElementById('fileInput').click()">Load .vlvl</button>
-                <button class="primary" style="background:#8e44ad;" onclick="downloadBinary()">Save .vlvl</button>
+                <button class="primary" style="background:#8e44ad;" onclick="document.getElementById('fileInput').click()">Load</button>
+                <button class="primary" style="background:#8e44ad;" onclick="downloadBinary()">Save</button>
             </div>
         </div>
     </div>
@@ -163,13 +176,13 @@
     <div id="toast">Copied to clipboard!</div>
 
     <script>
-        // --- Lightweight Perlin Noise Implementation ---
+        // --- Perlin Noise ---
         const Noise = (function() {
             var p = new Uint8Array(512), permutation = new Uint8Array(256), gradP = new Float64Array(512);
             var grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
             function seed(s) {
                 if(s > 0 && s < 1) s *= 65536; s = Math.floor(s); if(s < 256) s |= s << 8;
-                for(var i=0; i<256; i++) { var v = (i & 1) ? 0 : 255; var t = v ^ (s & 255); permutation[i] = permutation[i] = t; } // Reset somewhat
+                for(var i=0; i<256; i++) { var v = (i & 1) ? 0 : 255; var t = v ^ (s & 255); permutation[i] = permutation[i] = t; } 
                 for(var i=0; i<256; i++) permutation[i] = i;
                 for(var i=0; i<256; i++) { var j = (Math.random()*256)|0; var t = permutation[i]; permutation[i] = permutation[j]; permutation[j] = t; }
                 for(var i=0; i<256; i++) p[i] = p[i+256] = permutation[i];
@@ -191,15 +204,23 @@
             };
         })();
 
-        // --- Configuration ---
+        // --- Config ---
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0,0,0];
+        }
+
         const CELL_TYPES = {
             AIR:      { id: 0, color: '#A0D8EF', label: 'AIR' },
             DIRT:     { id: 1, color: '#5D4037', label: 'DIRT' },
             STONE:    { id: 2, color: '#757575', label: 'STONE' },
-            ORE: { id: 3, color: '#FFD700', label: 'LOOT' },
+            ORE:      { id: 3, color: '#FFD700', label: 'LOOT' },
             WALL:     { id: 4, color: '#212121', label: 'WALL' },
             DELETE:   { id: -1, color: '#b71c1c', label: 'DEL' } 
         };
+
+        // Cache RGB values for fast rasterization
+        Object.values(CELL_TYPES).forEach(t => t.rgb = hexToRgb(t.color));
 
         // --- State ---
         let points = []; 
@@ -211,26 +232,29 @@
         let selectedType = CELL_TYPES.DIRT;
         let currentMode = 'PLACE'; 
         let brushRadius = 2.0;
+        let useManhattan = false;
 
         let isMouseDown = false;
         let lastMouseX = null;
         let lastMouseY = null; 
         let isCursorInCanvas = false;
         
-        // D3 Cache
         let delaunay = null;
         let voronoi = null;
         
-        // Render Flags
         let geometryDirty = false; 
         let paintDirtyIdx = new Set(); 
 
-        // --- Double Buffering Setup ---
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { alpha: false });
+        
+        // Backing canvas for Euclidean (D3 vector drawing)
+        const vectorCanvas = document.createElement('canvas');
+        const vectorCtx = vectorCanvas.getContext('2d', { alpha: false });
 
-        const backingCanvas = document.createElement('canvas');
-        const backingCtx = backingCanvas.getContext('2d', { alpha: false });
+        // Backing canvas for Manhattan (Low-res rasterization)
+        const rasterCanvas = document.createElement('canvas');
+        const rasterCtx = rasterCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
 
         // --- Init ---
         function init() {
@@ -243,28 +267,17 @@
                 updateMousePos(e);
                 processInput(e);
             });
-            window.addEventListener('mouseup', () => {
-                isMouseDown = false;
-            });
+            window.addEventListener('mouseup', () => isMouseDown = false);
             canvas.addEventListener('mousemove', (e) => {
                 updateMousePos(e);
                 if(isMouseDown) processInput(e);
             });
             canvas.addEventListener('mouseenter', () => isCursorInCanvas = true);
-            canvas.addEventListener('mouseleave', () => {
-                isCursorInCanvas = false;
-                lastMouseX = null; 
-            });
-
+            canvas.addEventListener('mouseleave', () => { isCursorInCanvas = false; lastMouseX = null; });
             canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-            
             window.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-                    e.preventDefault();
-                    undo();
-                }
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
             });
-
             requestAnimationFrame(renderLoop);
         }
 
@@ -288,9 +301,8 @@
 
         function setMode(mode) {
             currentMode = mode;
-            document.getElementById('mode-place').classList.toggle('active', mode === 'PLACE');
-            document.getElementById('mode-paint').classList.toggle('active', mode === 'PAINT');
-            document.getElementById('mode-nudge').classList.toggle('active', mode === 'NUDGE');
+            document.querySelectorAll('.mode-opt').forEach(el => el.classList.remove('active'));
+            document.getElementById('mode-' + mode.toLowerCase()).classList.add('active');
             
             const desc = document.getElementById('mode-desc');
             if(mode === 'PLACE') desc.innerText = "Click to add (Single).";
@@ -301,6 +313,11 @@
         function updateBrush(val) {
             brushRadius = parseFloat(val);
             document.getElementById('brushSizeDisplay').innerText = brushRadius.toFixed(1);
+        }
+
+        function toggleMetric() {
+            useManhattan = document.getElementById('manhattanToggle').checked;
+            geometryDirty = true; // Force full redraw
         }
 
         function updateMousePos(e) {
@@ -330,18 +347,15 @@
             canvas.width = worldWidth * scale;
             canvas.height = worldHeight * scale;
             
-            backingCanvas.width = canvas.width;
-            backingCanvas.height = canvas.height;
+            // Vector canvas matches screen
+            vectorCanvas.width = canvas.width;
+            vectorCanvas.height = canvas.height;
             
             geometryDirty = true;
         }
 
         function recomputeGeometry() {
-            if (points.length === 0) {
-                delaunay = null;
-                voronoi = null;
-                return;
-            }
+            if (points.length === 0) { delaunay = null; voronoi = null; return; }
             const coords = new Float64Array(points.length * 2);
             for(let i=0; i<points.length; i++) {
                 coords[i*2] = points[i].x;
@@ -351,41 +365,31 @@
             voronoi = delaunay.voronoi([0, 0, worldWidth, worldHeight]);
         }
 
+        function checkDistance(p, wx, wy, radius) {
+            const dx = Math.abs(p.x - wx);
+            const dy = Math.abs(p.y - wy);
+            return useManhattan ? (dx + dy) <= radius : (dx*dx + dy*dy) <= (radius * radius);
+        }
+
         function processInput(e) {
             if (!lastMouseX || !isCursorInCanvas) return;
             applyToolAt(lastMouseX, lastMouseY);
         }
 
         function applyToolAt(wx, wy) {
-            const rSq = brushRadius * brushRadius;
-
-            // PAINT MODE
             if (currentMode === 'PAINT') {
                 if (points.length === 0) return;
-
-                // SPECIAL CASE: BULK DELETE
+                // Bulk Delete
                 if (selectedType.id === -1) {
                     const initialCount = points.length;
-                    
-                    // Filter: Keep only points that are OUTSIDE the brush radius
-                    points = points.filter(p => {
-                        const dx = p.x - wx;
-                        const dy = p.y - wy;
-                        return (dx*dx + dy*dy) > rSq;
-                    });
-
-                    if (points.length !== initialCount) {
-                        geometryDirty = true;
-                    }
+                    points = points.filter(p => !checkDistance(p, wx, wy, brushRadius));
+                    if (points.length !== initialCount) geometryDirty = true;
                     return;
                 }
-                
-                // Normal Paint (Recolor)
+                // Paint
                 let modified = false;
                 for(let i=0; i<points.length; i++) {
-                    const dx = points[i].x - wx;
-                    const dy = points[i].y - wy;
-                    if (dx*dx + dy*dy <= rSq) {
+                    if (checkDistance(points[i], wx, wy, brushRadius)) {
                         if (points[i].typeId !== selectedType.id) {
                             points[i].typeId = selectedType.id;
                             paintDirtyIdx.add(i);
@@ -393,10 +397,13 @@
                         }
                     }
                 }
+                if(modified) {
+                    // If Manhattan, we must redraw whole frame (fast now due to optimizations)
+                    if(useManhattan) geometryDirty = true;
+                }
                 return;
             }
 
-            // PLACE MODE (Single Point)
             if (currentMode === 'PLACE') {
                 let tooClose = false;
                 if(delaunay) {
@@ -407,56 +414,42 @@
                         if ((dx*dx + dy*dy) < 0.25) tooClose = true; 
                     }
                 }
-
                 if (!tooClose && selectedType.id !== -1) {
                     points.push({ x: wx, y: wy, typeId: selectedType.id });
                     geometryDirty = true;
                 }
             }
 
-            // NUDGE MODE (Radius)
             if (currentMode === 'NUDGE') {
                 if (points.length === 0) return;
-                
                 const strength = 0.4; 
                 let modified = false;
-
                 for(let i=0; i<points.length; i++) {
-                    const dx = points[i].x - wx;
-                    const dy = points[i].y - wy;
-                    
-                    if (dx*dx + dy*dy < rSq) {
+                    if (checkDistance(points[i], wx, wy, brushRadius)) {
                         points[i].x += (Math.random() - 0.5) * strength;
                         points[i].y += (Math.random() - 0.5) * strength;
-                        
-                        // Clamp
                         points[i].x = Math.max(0.1, Math.min(worldWidth - 0.1, points[i].x));
                         points[i].y = Math.max(0.1, Math.min(worldHeight - 0.1, points[i].y));
                         modified = true;
                     }
                 }
-
                 if (modified) geometryDirty = true;
             }
         }
 
-        // --- Procedural Generation Logic ---
-
+        // --- Generation ---
         function generateGrid() {
             saveState();
             const spacing = parseFloat(document.getElementById('gridSpacing').value);
             const offsetRatio = parseFloat(document.getElementById('gridOffset').value);
             if (spacing <= 0) return;
-            
             const rows = Math.ceil(worldHeight / spacing);
             const cols = Math.ceil(worldWidth / spacing);
-
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
                     let wx = x * spacing + (spacing/2);
                     let wy = y * spacing + (spacing/2);
                     if (y % 2 !== 0) wx += spacing * offsetRatio;
-                    
                     if (wx > 0 && wx < worldWidth && wy > 0 && wy < worldHeight) {
                         points.push({ x: wx, y: wy, typeId: selectedType.id });
                     }
@@ -472,16 +465,12 @@
             const noiseScale = parseFloat(document.getElementById('noiseScale').value);
             const noiseThreshold = parseFloat(document.getElementById('noiseThreshold').value);
             
-            // Re-seed for randomness every click
             Noise.seed(Math.random());
 
             let changed = false;
             for(let i = 0; i < points.length; i++) {
-                // Only affect DIRT cells
                 if (points[i].typeId === CELL_TYPES.DIRT.id) {
-                    // Calculate noise value (-1.0 to 1.0 roughly)
                     const n = Noise.perlin2(points[i].x * noiseScale, points[i].y * noiseScale);
-                    
                     if (n > noiseThreshold) {
                         points[i].typeId = CELL_TYPES.STONE.id;
                         paintDirtyIdx.add(i);
@@ -490,73 +479,71 @@
                 }
             }
 
-            if(changed) {
-                // Since we might change many points, forcing a partial render via the loop 
-                // is efficient enough, or we can just trigger a full repaint if >50% changed.
-                // paintDirtyIdx is processed in renderLoop.
-            } else {
-                // Just in case no undo needed
-                historyStack.pop();
-            }
+            if(!changed) historyStack.pop();
+            else if(useManhattan) geometryDirty = true;
         }
 
         function autoWall() {
             if (!voronoi || points.length === 0) return;
             saveState();
-
             let changed = false;
-            const eps = 0.001; // Epsilon for float comparison
-
+            const eps = 0.001; 
             for (let i = 0; i < points.length; i++) {
-                // Get the computed polygon for this cell
                 const polygon = voronoi.cellPolygon(i);
                 if (!polygon) continue;
-
                 let touchesEdge = false;
-
-                // Check every vertex of the polygon
                 for (const [x, y] of polygon) {
                     if (x < eps || x > worldWidth - eps || y < eps || y > worldHeight - eps) {
-                        touchesEdge = true;
-                        break;
+                        touchesEdge = true; break;
                     }
                 }
-
                 if (touchesEdge && points[i].typeId !== CELL_TYPES.WALL.id) {
                     points[i].typeId = CELL_TYPES.WALL.id;
-                    paintDirtyIdx.add(i); // Mark for redraw
-                    changed = true;
+                    paintDirtyIdx.add(i); changed = true;
                 }
             }
-
-            if (!changed) {
-                historyStack.pop(); // Remove undo state if nothing happened
-            }
+            if (!changed) historyStack.pop(); 
+            else if (useManhattan) geometryDirty = true;
         }
 
         function clearMap() {
             if(confirm("Clear all?")) {
-                saveState();
-                points = [];
-                geometryDirty = true;
+                saveState(); points = []; geometryDirty = true;
             }
         }
 
-        // --- Rendering ---
-        
+        // --- Render System ---
         function renderLoop() {
             if (geometryDirty) {
                 recomputeGeometry();
-                renderMapFull();
+                if (useManhattan) renderManhattanOptimized();
+                else renderEuclideanFull();
+                
                 geometryDirty = false;
                 paintDirtyIdx.clear();
-            } else if (paintDirtyIdx.size > 0) {
-                renderMapPartial();
+            } else if (paintDirtyIdx.size > 0 && !useManhattan) {
+                renderEuclideanPartial();
                 paintDirtyIdx.clear();
             }
 
-            ctx.drawImage(backingCanvas, 0, 0);
+            // 1. Draw Background (Map)
+            if(useManhattan) {
+                // Draw pixelated raster buffer scaled up
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(rasterCanvas, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.imageSmoothingEnabled = true; // Smooth vectors
+                ctx.drawImage(vectorCanvas, 0, 0);
+            }
 
+            // 2. Draw Seeds (Always sharp, on top of map)
+            // We pass 'ctx' (main canvas) so points are high-res
+            ctx.save();
+            ctx.scale(scale, scale);
+            drawSeeds(ctx); 
+            ctx.restore();
+
+            // 3. Draw UI Cursor
             if (isCursorInCanvas && lastMouseX !== null) {
                 drawCursor(lastMouseX, lastMouseY);
             }
@@ -564,65 +551,56 @@
             requestAnimationFrame(renderLoop);
         }
 
+
         function drawCursor(wx, wy) {
             ctx.save();
             ctx.scale(scale, scale);
-            
+            ctx.translate(wx, wy);
+
             ctx.beginPath();
-            ctx.arc(wx, wy, brushRadius, 0, Math.PI * 2);
+            if (useManhattan) {
+                ctx.moveTo(0, -brushRadius);
+                ctx.lineTo(brushRadius, 0);
+                ctx.lineTo(0, brushRadius);
+                ctx.lineTo(-brushRadius, 0);
+                ctx.closePath();
+            } else {
+                ctx.arc(0, 0, brushRadius, 0, Math.PI * 2);
+            }
             ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
             ctx.lineWidth = 2 / scale;
             ctx.stroke();
 
-            // Inner dot
             ctx.beginPath();
-            ctx.arc(wx, wy, 0.2, 0, Math.PI * 2);
+            ctx.arc(0, 0, 0.2, 0, Math.PI * 2);
             ctx.fillStyle = "rgba(255, 255, 255, 1)";
             ctx.fill();
-
-            // If Deleting, make cursor red
+            
             if (currentMode === 'PAINT' && selectedType.id === -1) {
                 ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
                 ctx.beginPath();
-                ctx.arc(wx, wy, brushRadius, 0, Math.PI * 2);
+                if (useManhattan) {
+                    ctx.moveTo(0, -brushRadius);
+                    ctx.lineTo(brushRadius, 0);
+                    ctx.lineTo(0, brushRadius);
+                    ctx.lineTo(-brushRadius, 0);
+                } else {
+                    ctx.arc(0, 0, brushRadius, 0, Math.PI * 2);
+                }
                 ctx.fill();
             }
-
             ctx.restore();
         }
 
-        function renderMapPartial() {
-            if (!voronoi) return;
-            backingCtx.save();
-            backingCtx.scale(scale, scale);
-            backingCtx.lineWidth = 1/scale;
-
-            paintDirtyIdx.forEach(i => {
-                backingCtx.beginPath();
-                voronoi.renderCell(i, backingCtx);
-                const typeId = points[i].typeId;
-                let color = '#000';
-                for(let k in CELL_TYPES) {
-                    if(CELL_TYPES[k].id === typeId) { color = CELL_TYPES[k].color; break; }
-                }
-                backingCtx.fillStyle = color;
-                backingCtx.fill();
-                backingCtx.strokeStyle = '#000';
-                backingCtx.stroke();
-            });
-
-            backingCtx.restore();
-        }
-
-        function renderMapFull() {
-            backingCtx.fillStyle = "#111";
-            backingCtx.fillRect(0, 0, backingCanvas.width, backingCanvas.height);
-
+        // --- Euclidean Render (Vector Based - Fast via D3) ---
+        function renderEuclideanFull() {
+            vectorCtx.fillStyle = "#111";
+            vectorCtx.fillRect(0, 0, vectorCanvas.width, vectorCanvas.height);
             if (!voronoi) return;
 
-            backingCtx.save();
-            backingCtx.scale(scale, scale);
-            backingCtx.lineWidth = 1/scale;
+            vectorCtx.save();
+            vectorCtx.scale(scale, scale);
+            vectorCtx.lineWidth = 1/scale;
 
             const typeGroups = {};
             for(let i = 0; i < points.length; i++) {
@@ -633,256 +611,281 @@
 
             for(let tid in typeGroups) {
                 let color = '#fff';
-                for(let k in CELL_TYPES) {
-                    if(CELL_TYPES[k].id == tid) { color = CELL_TYPES[k].color; break; }
-                }
-                backingCtx.beginPath();
-                const indices = typeGroups[tid];
-                for(let k=0; k<indices.length; k++) {
-                    voronoi.renderCell(indices[k], backingCtx);
-                }
-                backingCtx.fillStyle = color;
-                backingCtx.fill();
-                backingCtx.strokeStyle = '#000';
-                backingCtx.stroke(); 
+                for(let k in CELL_TYPES) { if(CELL_TYPES[k].id == tid) { color = CELL_TYPES[k].color; break; } }
+                vectorCtx.beginPath();
+                for(let idx of typeGroups[tid]) voronoi.renderCell(idx, vectorCtx);
+                vectorCtx.fillStyle = color;
+                vectorCtx.fill();
+                vectorCtx.strokeStyle = '#000';
+                vectorCtx.stroke(); 
             }
-            
-            // Draw seeds
-            backingCtx.fillStyle = "rgba(0,0,0,0.2)";
-            backingCtx.beginPath();
-            for (let i = 0; i < points.length; i++) {
-                backingCtx.moveTo(points[i].x + 0.1, points[i].y);
-                backingCtx.arc(points[i].x, points[i].y, 0.1, 0, Math.PI * 2);
-            }
-            backingCtx.fill();
-
-            backingCtx.restore();
+            drawSeeds(vectorCtx);
+            vectorCtx.restore();
         }
 
-        // --- Code Gen ---
-        function generateCode() {
-            if (points.length === 0) {
-                document.getElementById('code-output').value = "// No points to generate.";
-                return;
+        function renderEuclideanPartial() {
+            if (!voronoi) return;
+            vectorCtx.save();
+            vectorCtx.scale(scale, scale);
+            vectorCtx.lineWidth = 1/scale;
+            paintDirtyIdx.forEach(i => {
+                vectorCtx.beginPath();
+                voronoi.renderCell(i, vectorCtx);
+                let color = '#000';
+                for(let k in CELL_TYPES) if(CELL_TYPES[k].id === points[i].typeId) color = CELL_TYPES[k].color;
+                vectorCtx.fillStyle = color;
+                vectorCtx.fill();
+                vectorCtx.strokeStyle = '#000';
+                vectorCtx.stroke();
+            });
+            vectorCtx.restore();
+        }
+
+        // --- Manhattan Render (Optimized Low-Res Raster) ---
+        function renderManhattanOptimized() {
+            if (!points.length || !delaunay) return;
+
+            // Cap resolution at 600px max dimension. 
+            // 600x600 = 360k pixels. Fast enough for JS, detailed enough for editing.
+            const MAX_RES = 600; 
+            
+            let rW = worldWidth, rH = worldHeight;
+            const aspect = worldWidth / worldHeight;
+            
+            // Scaling logic
+            if (worldWidth < MAX_RES && worldHeight < MAX_RES) {
+                // Supersample small worlds for cleaner diagonals
+                const mult = Math.min(Math.floor(MAX_RES/Math.max(worldWidth, worldHeight)), 4);
+                rW = worldWidth * mult;
+                rH = worldHeight * mult;
+            } else {
+                if(rW > MAX_RES) { rW = MAX_RES; rH = rW / aspect; }
+                if(rH > MAX_RES) { rH = MAX_RES; rW = rH * aspect; }
+            }
+            
+            rW = Math.floor(rW); rH = Math.floor(rH);
+            
+            if (rasterCanvas.width !== rW || rasterCanvas.height !== rH) {
+                rasterCanvas.width = rW;
+                rasterCanvas.height = rH;
             }
 
+            const imgData = rasterCtx.getImageData(0, 0, rW, rH);
+            const data = imgData.data;
+            const colorMap = {};
+            for(let k in CELL_TYPES) colorMap[CELL_TYPES[k].id] = CELL_TYPES[k].rgb;
+
+            const invScaleX = worldWidth / rW;
+            const invScaleY = worldHeight / rH;
+
+            // Buffer to store indices of the previous row for vertical edge detection
+            const rowIndices = new Int32Array(rW).fill(-1);
+            
+            let bestIdx = 0;
+
+            for (let y = 0; y < rH; y++) {
+                // Reset search heuristic at start of row
+                bestIdx = delaunay.find(0, y * invScaleY, bestIdx);
+                let prevIdx = -1; // For horizontal edge detection
+
+                for (let x = 0; x < rW; x++) {
+                    const wx = x * invScaleX;
+                    const wy = y * invScaleY;
+
+                    // Periodic re-sync with Euclidean graph prevents getting stuck in local minima
+                    if(x % 20 === 0) bestIdx = delaunay.find(wx, wy, bestIdx);
+
+                    let bestDist = Math.abs(points[bestIdx].x - wx) + Math.abs(points[bestIdx].y - wy);
+                    
+                    // Hill Climb (find true Manhattan neighbor)
+                    let changed = true;
+                    let iter = 0;
+                    while(changed && iter++ < 8) {
+                        changed = false;
+                        const neighbors = voronoi.neighbors(bestIdx);
+                        for (const nIdx of neighbors) {
+                            const d = Math.abs(points[nIdx].x - wx) + Math.abs(points[nIdx].y - wy);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                bestIdx = nIdx;
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    // --- Edge Detection ---
+                    let isEdge = false;
+                    // Check Left
+                    if (x > 0 && bestIdx !== prevIdx) isEdge = true;
+                    // Check Up
+                    if (y > 0 && bestIdx !== rowIndices[x]) isEdge = true;
+
+                    // Update buffers
+                    prevIdx = bestIdx;
+                    rowIndices[x] = bestIdx;
+
+                    const px = (y * rW + x) * 4;
+
+                    if (isEdge) {
+                        // Draw Black Outline
+                        data[px] = 0; data[px+1] = 0; data[px+2] = 0; data[px+3] = 255;
+                    } else {
+                        // Draw Cell Color
+                        const rgb = colorMap[points[bestIdx].typeId] || [0,0,0];
+                        data[px] = rgb[0];
+                        data[px+1] = rgb[1];
+                        data[px+2] = rgb[2];
+                        data[px+3] = 255;
+                    }
+                }
+            }
+
+            rasterCtx.putImageData(imgData, 0, 0);
+        }
+
+
+        function drawSeeds(ctxToUse) {
+            // Draws sharp vector points on top of the map
+            ctxToUse.fillStyle = "rgba(0,0,0,0.4)";
+            ctxToUse.beginPath();
+            for (let i = 0; i < points.length; i++) {
+                // Move slightly to center the pixel
+                ctxToUse.moveTo(points[i].x + 0.15, points[i].y);
+                ctxToUse.arc(points[i].x, points[i].y, 0.15, 0, Math.PI * 2);
+            }
+            ctxToUse.fill();
+        }
+
+
+        // --- Import/Export ---
+        function generateCode() {
+            if (points.length === 0) return;
             const idToName = {};
             for(let k in CELL_TYPES) if(CELL_TYPES[k].id !== -1) idToName[CELL_TYPES[k].id] = k;
 
-            // --- AUTO CALCULATE BUCKET SIZE ---
-            // The C++ engine uses a 3x3 bucket search. The bucket size must be large
-            // enough that the closest seed is unlikely to be further than one bucket away.
-            // Formula: sqrt(Area / Points) gives average spacing (characteristic length).
-            // Multiplier 2.0 provides a safety margin for non-uniform distributions.
-            const totalArea = worldWidth * worldHeight;
-            const densityLength = Math.sqrt(totalArea / points.length);
+            const densityLength = Math.sqrt((worldWidth * worldHeight) / points.length);
             const autoBucketSize = (densityLength * 2.0).toFixed(2);
 
-            let output = `// Level Dimensions: ${worldWidth} x ${worldHeight}\n`;
+            let output = `// Level: ${worldWidth}x${worldHeight}. Metric: ${useManhattan?'Manhattan':'Euclidean'}\n`;
             output += `static const float WORLD_WIDTH = ${worldWidth}f;\n`;
             output += `static const float WORLD_HEIGHT = ${worldHeight}f;\n`;
-            
-            output += `// Optimized Bucket Size (Calculated from point density)\n`;
-            output += `static const float BUCKET_SIZE = ${autoBucketSize}f;\n\n`;
-
+            output += `static const float BUCKET_SIZE = ${autoBucketSize}f;\n`;
+            output += `static const bool USE_MANHATTAN = ${useManhattan ? 'true' : 'false'};\n\n`;
             output += `static const std::vector<LevelCellDef> levelData = {\n`;
-            
-            const lines = points.map(p => {
-                const tName = idToName[p.typeId] || "AIR";
-                return `    { ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, CellType::${tName} }`;
-            });
-            
-            output += lines.join(",\n");
+            output += points.map(p => `    { ${p.x.toFixed(2)}f, ${p.y.toFixed(2)}f, CellType::${idToName[p.typeId]||"AIR"} }`).join(",\n");
             output += `\n};\n`;
             document.getElementById('code-output').value = output;
         }
 
         function downloadBinary() {
-            if (points.length === 0) {
-                alert("No points to export.");
-                return;
-            }
+            if (points.length === 0) return alert("No points.");
+            const FILE_VERSION = 2;
+            const densityLength = Math.sqrt((worldWidth * worldHeight) / points.length);
+            const bucketSize = parseFloat((densityLength * 2.0).toFixed(2));
 
-            const FILE_VERSION = 1;
-
-            // 1. Calculate Bucket Size
-            const totalArea = worldWidth * worldHeight;
-            const densityLength = Math.sqrt(totalArea / points.length);
-            const autoBucketSize = parseFloat((densityLength * 2.0).toFixed(2));
-
-            // 2. Prepare Buffer
-            // Header: 1 byte (Version) + 16 bytes (Meta) + Body: (NumPoints * 9 bytes)
-            const bufferSize = 1 + 16 + (points.length * 9);
-            const buffer = new ArrayBuffer(bufferSize);
+            const buffer = new ArrayBuffer(18 + points.length * 9);
             const view = new DataView(buffer);
-            let offset = 0;
+            let off = 0;
 
-            // 3. Write Header
-            view.setUint8(offset, FILE_VERSION); offset += 1; // Version
-            
-            view.setFloat32(offset, worldWidth, true); offset += 4;
-            view.setFloat32(offset, worldHeight, true); offset += 4;
-            view.setFloat32(offset, autoBucketSize, true); offset += 4;
-            view.setUint32(offset, points.length, true); offset += 4;
+            view.setUint8(off, FILE_VERSION); off+=1;
+            view.setFloat32(off, worldWidth, true); off+=4;
+            view.setFloat32(off, worldHeight, true); off+=4;
+            view.setFloat32(off, bucketSize, true); off+=4;
+            view.setUint8(off, useManhattan ? 1 : 0); off+=1;
+            view.setUint32(off, points.length, true); off+=4;
 
-            // 4. Write Points
             for (let i = 0; i < points.length; i++) {
-                const p = points[i];
-                view.setFloat32(offset, p.x, true); offset += 4;
-                view.setFloat32(offset, p.y, true); offset += 4;
-                view.setUint8(offset, p.typeId); offset += 1;
+                view.setFloat32(off, points[i].x, true); off+=4;
+                view.setFloat32(off, points[i].y, true); off+=4;
+                view.setUint8(off, points[i].typeId); off+=1;
             }
 
-            // 5. Trigger Download
-            const blob = new Blob([buffer], { type: "application/octet-stream" });
-            const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
-            a.href = url;
+            a.href = URL.createObjectURL(new Blob([buffer], { type: "application/octet-stream" }));
             a.download = "level_data.vlvl";
-            document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            // 6. Generate C++ Loader Code
             generateLoaderCode(points.length, FILE_VERSION);
         }
 
         function importBinary(input) {
             const file = input.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const buffer = e.target.result;
-                    const view = new DataView(buffer);
-                    let offset = 0;
-
-                    // 1. Read Version
-                    const version = view.getUint8(offset); offset += 1;
-                    if (version !== 1) {
-                        alert("Error: Unsupported .vlvl version: " + version);
-                        return;
-                    }
-
-                    // 2. Read Header
-                    const w = view.getFloat32(offset, true); offset += 4;
-                    const h = view.getFloat32(offset, true); offset += 4;
-                    const bucketSize = view.getFloat32(offset, true); offset += 4; // Read but ignore
-                    const count = view.getUint32(offset, true); offset += 4;
-
-                    // 3. Prepare State
-                    saveState(); // Push current state to undo stack
+                    const view = new DataView(e.target.result);
+                    let off = 0;
+                    const ver = view.getUint8(off++);
+                    if (ver > 2) return alert("Unsupported version");
                     
-                    // Update Inputs
+                    const w = view.getFloat32(off, true); off+=4;
+                    const h = view.getFloat32(off, true); off+=4;
+                    const bs = view.getFloat32(off, true); off+=4;
+                    
+                    let isMan = false;
+                    if(ver >= 2) { isMan = view.getUint8(off++) === 1; }
+
+                    const count = view.getUint32(off, true); off+=4;
+                    saveState();
+                    
                     document.getElementById('worldW').value = w;
                     document.getElementById('worldH').value = h;
+                    useManhattan = isMan;
+                    document.getElementById('manhattanToggle').checked = isMan;
 
-                    // 4. Read Points
                     const newPoints = [];
-                    for(let i = 0; i < count; i++) {
-                        const px = view.getFloat32(offset, true); offset += 4;
-                        const py = view.getFloat32(offset, true); offset += 4;
-                        const type = view.getUint8(offset); offset += 1;
-                        newPoints.push({ x: px, y: py, typeId: type });
+                    for(let i=0; i<count; i++) {
+                        const px = view.getFloat32(off, true); off+=4;
+                        const py = view.getFloat32(off, true); off+=4;
+                        const t = view.getUint8(off++);
+                        newPoints.push({x:px, y:py, typeId:t});
                     }
-
-                    // 5. Apply
                     points = newPoints;
-                    resizeWorld(); // This updates worldWidth/Height from inputs and resets canvas
+                    resizeWorld();
                     
-                    // Reset input so same file can be selected again
-                    input.value = '';
-                    
-                    // Toast
                     const x = document.getElementById("toast");
-                    x.innerText = `Loaded ${count} cells!`;
+                    x.innerText = `Loaded ${count} cells (v${ver})`;
                     x.className = "show";
-                    setTimeout(() => x.className = x.className.replace("show", ""), 3000);
-
-                } catch (err) {
-                    console.error(err);
-                    alert("Failed to parse file. Is it a valid .vlvl?");
-                }
+                    setTimeout(()=>x.className=x.className.replace("show",""), 3000);
+                } catch(err) { console.error(err); alert("Load failed"); }
+                input.value = '';
             };
             reader.readAsArrayBuffer(file);
         }
 
-
         function generateLoaderCode(count, version) {
             const code = `// --- C++ BINARY LOADER (Version ${version}) ---
-// Format: [Ver:u8] [W:f] [H:f] [Bucket:f] [Count:u32] + [X:f][Y:f][Type:u8]...
-
-#include <vector>
-#include <fstream>
-#include <iostream>
-
 struct LevelData {
     float width, height, bucketSize;
+    bool useManhattan; 
     struct Point { float x, y; uint8_t type; };
     std::vector<Point> points;
 };
-
 LevelData LoadLevel(const char* filename) {
-    LevelData level = {0,0,0};
+    LevelData level = {0,0,0,false};
     std::ifstream file(filename, std::ios::binary);
-    
-    if (!file) { std::cerr << "File not found\\n"; return level; }
-
-    // 1. Check Version
-    uint8_t fileVer;
-    file.read(reinterpret_cast<char*>(&fileVer), 1);
-    if (fileVer != ${version}) { 
-        std::cerr << "Version mismatch! Expected ${version}, got " << (int)fileVer << "\\n"; 
-        return level; 
+    if (!file) return level;
+    uint8_t v; file.read((char*)&v, 1);
+    file.read((char*)&level.width, 4);
+    file.read((char*)&level.height, 4);
+    file.read((char*)&level.bucketSize, 4);
+    if (v >= 2) { uint8_t m; file.read((char*)&m, 1); level.useManhattan = (m==1); }
+    uint32_t c; file.read((char*)&c, 4);
+    level.points.reserve(c);
+    for(uint32_t i=0; i<c; i++) {
+        float x,y; uint8_t t;
+        file.read((char*)&x, 4); file.read((char*)&y, 4); file.read((char*)&t, 1);
+        level.points.push_back({x,y,t});
     }
-
-    // 2. Read Header Data
-    uint32_t count = 0;
-    file.read(reinterpret_cast<char*>(&level.width), 4);
-    file.read(reinterpret_cast<char*>(&level.height), 4);
-    file.read(reinterpret_cast<char*>(&level.bucketSize), 4);
-    file.read(reinterpret_cast<char*>(&count), 4);
-
-    // 3. Read Points
-    level.points.reserve(count);
-    for(uint32_t i = 0; i < count; i++) {
-        float x, y;
-        uint8_t t;
-        // We read fields individually to avoid struct packing/padding issues
-        file.read(reinterpret_cast<char*>(&x), 4);
-        file.read(reinterpret_cast<char*>(&y), 4);
-        file.read(reinterpret_cast<char*>(&t), 1);
-        level.points.push_back({x, y, t});
-    }
-
     return level;
-}
-
-// Saved ${count} points to 'level_data.vlvl'
-`;
+}`;
             document.getElementById('code-output').value = code;
-            
-            const x = document.getElementById("toast");
-            x.innerText = "Binary file downloaded!";
-            x.className = "show";
-            setTimeout(() => { 
-                x.className = x.className.replace("show", ""); 
-                x.innerText = "Copied to clipboard!";
-            }, 3000);
         }
 
-
         function copyCode() {
-            const copyText = document.getElementById("code-output");
-            if (!copyText.value) return;
-            copyText.select();
-            navigator.clipboard.writeText(copyText.value).then(() => {
-                const x = document.getElementById("toast");
-                x.className = "show";
-                setTimeout(() => x.className = x.className.replace("show", ""), 3000);
-            });
+            navigator.clipboard.writeText(document.getElementById("code-output").value);
+            const x = document.getElementById("toast"); x.className = "show";
+            setTimeout(() => x.className = x.className.replace("show", ""), 3000);
         }
 
         init();

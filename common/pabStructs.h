@@ -12,6 +12,7 @@
 #include <array>
 #include <optional>
 #include "common/playfield.h"
+#include <string_view>
 
 const int TICK_HZ = 30;
 
@@ -21,16 +22,39 @@ struct Player {
   Vector2 pos = Vector2{0, 0};
   float hue = 0.0f;
   Vector2 velocity = Vector2{0, 0};
-  float defSpeed = 50.0f; //How fast you walk by default
+  float defSpeed = 50.0f; // How fast you walk by default
   float defFriction = 0.001f;
   float friction = 0.001f;
   // client side
   bool renderable = false;
 };
 
+enum class WeaponType : uint8_t {
+  BOMB = 0,
+  MINE,
+  SHARP_BOMB,
+  ROLLER,
+  GRENADE,
+  NUKE,
+  WEP_COUNT
+};
+
+struct Bomb {
+  uint8_t id;
+  uint8_t ownerId;
+  WeaponType type;
+  Vector2 pos;
+  Vector2 velocity;
+  float fuseTimer;
+  float height;
+  float heightVel;
+  bool isStuck;
+};
+
 struct GameState {
   Playfield playfield;
   std::unordered_map<uint8_t, Player> players;
+  std::unordered_map<uint8_t, Bomb> bombs;
 };
 
 struct PlayerInputState {
@@ -49,6 +73,58 @@ struct PlayerInputState {
 struct InputState {
   std::vector<PlayerInputState> playerInputs;
 };
+
+
+
+struct WeaponProperties {
+  std::string_view name;
+  float startingFuse;
+  float damage;
+  float radius;
+  float friction;
+  float bounciness;
+};
+
+constexpr std::array<WeaponProperties,
+                     static_cast<size_t>(WeaponType::WEP_COUNT)>
+    WeaponPropRegistry = {{
+        [static_cast<size_t>(WeaponType::BOMB)] = {.name = "Bomb",
+                              .startingFuse = 2.0f,
+                              .damage = 150,
+                              .radius = 6,
+                              .friction = 0.7f,
+                              .bounciness = 0.0f},
+        [static_cast<size_t>(WeaponType::MINE)] = {.name = "Mine",
+                              .startingFuse = 2.0f,
+                              .damage = 150,
+                              .radius = 6,
+                              .friction = 0.7f,
+                              .bounciness = 0.0f},
+        [static_cast<size_t>(WeaponType::SHARP_BOMB)] = {.name = "Sharp Bomb",
+                                    .startingFuse = 2.0f,
+                                    .damage = 150,
+                                    .radius = 6,
+                                    .friction = 0.7f,
+                                    .bounciness = 0.0f},
+        [static_cast<size_t>(WeaponType::ROLLER)] = {.name = "Roller",
+                                .startingFuse = 2.0f,
+                                .damage = 150,
+                                .radius = 6,
+                                .friction = 0.7f,
+                                .bounciness = 0.0f},
+        [static_cast<size_t>(WeaponType::GRENADE)] = {.name = "Grenade",
+                                 .startingFuse = 2.0f,
+                                 .damage = 150,
+                                 .radius = 6,
+                                 .friction = 0.7f,
+                                 .bounciness = 0.0f},
+        [static_cast<size_t>(WeaponType::NUKE)] = {.name = "Nuke",
+                              .startingFuse = 2.0f,
+                              .damage = 150,
+                              .radius = 6,
+                              .friction = 0.7f,
+                              .bounciness = 0.0f},
+    }};
 
 // ------- Networking -------------
 
@@ -88,6 +164,7 @@ struct SnapshotPlayer {
 struct Snapshot {
   uint32_t tick = 0;
   std::vector<SnapshotPlayer> players;
+  std::vector<Bomb> bombs;
 };
 
 struct OutgoingPacket {

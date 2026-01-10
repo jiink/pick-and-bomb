@@ -44,6 +44,15 @@ const SnapshotPlayer* FindPlayerInSnapshot(const Snapshot& snap, uint8_t id) {
   return nullptr;
 }
 
+const Bomb* FindBombInSnapshot(const Snapshot& snap, uint8_t id) {
+  for (const auto& b : snap.bombs) {
+    if (b.id == id) {
+      return &b;
+    }
+  }
+  return nullptr;
+}
+
 Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
   auto it = players.find(id);
   if (it != players.end()) {
@@ -66,6 +75,47 @@ void DrawPlayers(const std::unordered_map<uint8_t, Player>& players) {
   }
 }
 
+void DrawBomb(const Bomb& bomb) {
+  float diameter = sinf(bomb.fuseTimer * 30.0f) * 0.1f + 0.2f;
+  Vector2 drawCoords = {bomb.pos.x, bomb.pos.y + bomb.height * 5.0f};
+  DrawCircleV(drawCoords, diameter + 0.1f, WHITE);
+  switch (bomb.type) {
+  case WeaponType::BOMB:
+    DrawCircleV(drawCoords, diameter, RED);
+    break;
+  case WeaponType::MINE:
+    DrawCircleV(drawCoords, diameter, BLUE);
+    break;
+  case WeaponType::SHARP_BOMB:
+    DrawCircleV(drawCoords, diameter, GREEN);
+    break;
+  case WeaponType::GRENADE:
+    DrawCircleV(drawCoords, diameter, YELLOW);
+    break;
+  case WeaponType::ROLLER:
+    DrawCircleV(drawCoords, diameter, PURPLE);
+    break;
+  case WeaponType::NUKE:
+    DrawCircleV(drawCoords, diameter, ORANGE);
+    break;
+  default:
+    break;
+  }
+  // Draw fuse timer ring
+  float relativeTimeLeft =
+      bomb.fuseTimer / WeaponPropRegistry[(uint8_t)bomb.type].startingFuse;
+  DrawRing(drawCoords, diameter + 0.3f, diameter + 0.4f, 0,
+           relativeTimeLeft * 360.0f, 30, WHITE);
+  DrawRing(drawCoords, diameter + 0.2f, diameter + 0.3f, 0,
+           relativeTimeLeft * 360.0f, 30, BLACK);
+}
+
+void DrawBombs(const std::unordered_map<uint8_t, Bomb>& bombs) {
+  for (auto& [id, b] : bombs) {
+    DrawBomb(b);
+  }
+}
+
 void DrawPlayfield(const Playfield& playfield) {
 
   BeginShaderMode(_playfieldShader);
@@ -82,6 +132,7 @@ void DrawPlayfield(const Playfield& playfield) {
 void DrawGameState(const GameState& gameState) {
   DrawPlayfield(gameState.playfield);
   DrawPlayers(gameState.players);
+  DrawBombs(gameState.bombs);
 }
 
 void NetAddPacket(std::vector<uint8_t> packet) {
@@ -358,6 +409,19 @@ void UpdateInterpolation(float dt) {
     }
     _gameState.players[visualP.id] = visualP;
   }
+  _gameState.bombs.clear();
+  for (const Bomb& nextB : next.bombs) {
+    Bomb visualB = nextB;
+    const Bomb* prevB = FindBombInSnapshot(prev, nextB.id);
+    if (prevB) {
+      visualB.pos = Vector2Lerp(prevB->pos, nextB.pos, alpha);
+      visualB.height = Lerp(prevB->height, nextB.height, alpha);
+    } else {
+      visualB.pos = nextB.pos;
+      visualB.height = nextB.height;
+    }
+    _gameState.bombs[nextB.id] = visualB;
+  }
 }
 
 void Draw() {
@@ -400,6 +464,13 @@ void NetApplySnapshot(uint32_t serverTick, std::vector<uint8_t> data) {
     SnapshotPlayer sp;
     pr >> sp.id >> sp.dead >> sp.pos.x >> sp.pos.y;
     newSnap.players.push_back(sp);
+  }
+  uint8_t numBombs;
+  pr >> numBombs;
+  for (size_t i = 0; i < numBombs; i++) {
+    Bomb sb{};
+    pr >> sb.id >> sb.type >> sb.pos >> sb.height >> sb.fuseTimer;
+    newSnap.bombs.push_back(sb);
   }
   _snapshotBuffer.push_back(newSnap);
   // sort buffer and init logic

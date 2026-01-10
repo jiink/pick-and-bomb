@@ -82,4 +82,5 @@ public:
   int GetNumCells();
   VoronoiInfo GetVoronoiInfo(Vector2 pos);
   Vector2 GetBoundaryNormal(Vector2 pos);
+  void Explode(Vector2 center, float radius, float damage);
 };

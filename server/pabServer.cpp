@@ -10,13 +10,105 @@
 #include <iostream>
 
 namespace {
+
+using BombUpdateFn = bool (*)(Bomb&, GameState&, float);
+using BombDetonateFn = void (*)(const Bomb&, GameState&);
+
+struct WeaponBehavior {
+  BombUpdateFn update;
+  BombDetonateFn detonate;
+};
+
+bool BombUpdate_Standard(Bomb& b, GameState& s, float dt);
+void BombDetonate_Standard(const Bomb& b, GameState& s);
+
 GameState _gameState;
 InputState _inputState;
 uint32_t _tickNum = 0;
 uint8_t _nextPlayerId = 0;
+uint8_t _nextBombId = 0;
 std::deque<OutgoingPacket> _netPacketsToSend;
 const size_t MAX_PACKET_SIZE = 100000;
 const size_t MAX_PACKET_COUNT = 100;
+
+constexpr std::array<WeaponBehavior,
+                     static_cast<uint8_t>(WeaponType::WEP_COUNT)>
+    _weaponLogic = {{
+        [static_cast<uint8_t>(WeaponType::BOMB)] = {.update = &BombUpdate_Standard,
+                              .detonate = &BombDetonate_Standard},
+        [static_cast<uint8_t>(WeaponType::MINE)] = {.update = &BombUpdate_Standard,
+                              .detonate = &BombDetonate_Standard},
+        [static_cast<uint8_t>(WeaponType::SHARP_BOMB)] = {.update = &BombUpdate_Standard,
+                                    .detonate = &BombDetonate_Standard},
+        [static_cast<uint8_t>(WeaponType::ROLLER)] = {.update = &BombUpdate_Standard,
+                                .detonate = &BombDetonate_Standard},
+        [static_cast<uint8_t>(WeaponType::GRENADE)] = {.update = &BombUpdate_Standard,
+                                 .detonate = &BombDetonate_Standard},
+        [static_cast<uint8_t>(WeaponType::NUKE)] = {.update = &BombUpdate_Standard,
+                              .detonate = &BombDetonate_Standard},
+    }};
+
+float RandomFloat(float min, float max)
+{
+  float scale = rand() / (float) RAND_MAX;
+  return min + scale * ( max - min );
+}
+
+
+void Explode(GameState& state, Vector2 center, float radius, float damage) {
+  PAB_INFO("boom");
+  state.playfield.Explode(center, radius, damage);
+}
+
+bool BombUpdate_Standard(Bomb& b, GameState& s, float dt) {
+  const WeaponProperties& props = WeaponPropRegistry[(uint8_t)b.type];
+  b.velocity = Vector2Scale(b.velocity, pow(props.friction, dt));
+  Vector2 nextPos = Vector2Add(b.pos, Vector2Scale(b.velocity, dt));
+  Cell* c = s.playfield.GetCellAtWorldPos(nextPos);
+  if (c && GetCellTypeInfo(c->type).isSolid) {
+    b.velocity = {0, 0};
+    b.isStuck = true;
+  } else {
+    b.pos = nextPos;
+  }
+  b.fuseTimer -= dt;
+  return b.fuseTimer <= 0;
+}
+
+void BombDetonate_Standard(const Bomb& b, GameState& s) {
+  const WeaponProperties& props = WeaponPropRegistry[(uint8_t)b.type];
+  Explode(s, b.pos, props.radius, props.damage);
+}
+
+void UpdateBombs(GameState& state, float dt) {
+  std::vector<uint8_t> explodedIds;
+  for (auto& [id, bomb] : state.bombs) {
+    const WeaponBehavior& behavior = _weaponLogic[(uint8_t)bomb.type];
+    if (behavior.update(bomb, state, dt)) {
+      behavior.detonate(bomb, state);
+      explodedIds.push_back(id);
+    }
+  }
+  for (auto id : explodedIds) {
+    state.bombs.erase(id);
+  }
+}
+
+void SpawnBomb(GameState& state, uint8_t ownerId, WeaponType wType,
+               Vector2 startPos, Vector2 startVel) {
+  Bomb b = {};
+  b.id = _nextBombId++;
+  b.ownerId = ownerId;
+  b.type = wType;
+  b.pos = startPos;
+  b.velocity = startVel;
+  b.fuseTimer = WeaponPropRegistry[static_cast<uint8_t>(wType)].startingFuse;
+  if (wType == WeaponType::GRENADE) {
+    b.height = 0.1f;
+    b.heightVel = Vector2Length(startVel) * 0.2f;
+  }
+  state.bombs[b.id] = b;
+}
 
 Player* GetPlayer(std::unordered_map<uint8_t, Player>& players, int id) {
   auto it = players.find(id);
@@ -64,6 +156,14 @@ void UpdatePlayer(Player& player, GameState& state,
     }
   }
   player.pos = nextPos;
+  if (pInput.attackReleased) {
+    PAB_INFO("attacked");
+    Vector2 bombSpawnPos =
+        Vector2Add(player.pos, (Vector2){RandomFloat(-0.1f, 0.1f),
+                                         RandomFloat(-0.1f, 0.1f)});
+    Vector2 throwVel = Vector2Scale(pInput.direction, 15.0f);
+    SpawnBomb(state, player.id, WeaponType::BOMB, bombSpawnPos, throwVel);
+  }
 }
 
 PlayerInputState GetPlayerInputs(const InputState& inputs, int playerId) {
@@ -147,6 +247,7 @@ void UpdateGame(GameState& state, InputState& inputs, const float dt) {
     PlayerInputState pInput = GetPlayerInputs(inputs, id);
     UpdatePlayer(p, state, pInput, dt);
   }
+  UpdateBombs(state, dt);
 }
 
 void ApplyPlayerInputs(const PlayerInputState& pInputs) {
@@ -191,6 +292,10 @@ void NetSendSnapshot() {
      << (uint8_t)_gameState.players.size();
   for (const auto& [id, p] : _gameState.players) {
     pb << p.id << (uint8_t)p.dead << p.pos.x << p.pos.y;
+  }
+  pb << (uint8_t)_gameState.bombs.size();
+  for (const auto& [id, b] : _gameState.bombs) {
+    pb << b.id << (uint8_t)b.type << b.pos << b.height << b.fuseTimer;
   }
   NetAddPacket(std::move(pb.buffer));
 }
@@ -305,7 +410,8 @@ void ApplyPlayerInputsFromPacket(std::vector<uint8_t> data, uint8_t playerId) {
   PacketReader pr(data);
   pr >> pInputs.playerId >> pInputs.direction.x >> pInputs.direction.y >>
       pInputs.attack >> pInputs.attackPressed >> pInputs.attackReleased >>
-      pInputs.wepSelectPressed >> pInputs.leftPressed >> pInputs.rightPressed >> pInputs.mine;
+      pInputs.wepSelectPressed >> pInputs.leftPressed >> pInputs.rightPressed >>
+      pInputs.mine;
   pInputs.playerId = playerId;
   ApplyPlayerInputs(pInputs);
 }

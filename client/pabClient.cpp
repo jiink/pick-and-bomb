@@ -331,8 +331,8 @@ void Init() {
 
 void Tick() {
   _tickNum++;
-  UpdatePlayerInputState(_inputs, _inputBindings, 0);
   NetSendInputs(_inputs);
+  ClearTransientPlayerInputState(_inputs, _inputBindings, 0);
   bool modechanged = false;
   if (IsKeyDown(KEY_ZERO)) {
     _playfieldShaderMode = 0;
@@ -425,6 +425,7 @@ void UpdateInterpolation(float dt) {
 }
 
 void Draw() {
+  UpdatePlayerInputState(_inputs, _inputBindings, 0);
   UpdateInterpolation(GetFrameTime());
   camera.offset =
       Vector2{(float)GetScreenWidth() / 2.0f, (float)GetScreenHeight() / 2.0f};

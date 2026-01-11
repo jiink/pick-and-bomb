@@ -27,3 +27,5 @@ struct PlayerBindings {
 void InitPlayerBindings(PlayerBindings& pBindings, int playerNum);
 void UpdatePlayerInputState(PlayerInputState& pInput,
                             const PlayerBindings& pBindings, int gamepadNum);
+void ClearTransientPlayerInputState(PlayerInputState& pInput,
+                            const PlayerBindings& pBindings, int gamepadNum);

@@ -53,7 +53,7 @@ void InitPlayerBindings(PlayerBindings& pBindings, int playerNum) {
 
 void UpdatePlayerInputState(PlayerInputState& pInput,
                             const PlayerBindings& pBindings, int gamepadNum) {
-  pInput = {};
+  pInput.direction = {0, 0};
   if (IsKeyDown(
           pBindings.bindings[static_cast<size_t>(BindingAction::UP)].key)) {
     pInput.direction.y -= 1;
@@ -82,9 +82,14 @@ void UpdatePlayerInputState(PlayerInputState& pInput,
     }
   }
   pInput.direction = Vector2Normalize(pInput.direction);
-  if (IsKeyDown(
-          pBindings.bindings[static_cast<size_t>(BindingAction::ATTACK)].key)) {
-    pInput.attack = true;
+  pInput.attack = IsKeyDown(
+      pBindings.bindings[static_cast<size_t>(BindingAction::ATTACK)].key);
+  pInput.mine = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+  if (IsGamepadAvailable(gamepadNum)) {
+    pInput.attack |=
+        IsGamepadButtonDown(gamepadNum, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+    pInput.mine |=
+        IsGamepadButtonDown(gamepadNum, GAMEPAD_BUTTON_LEFT_FACE_RIGHT);
   }
   if (IsKeyPressed(
           pBindings.bindings[static_cast<size_t>(BindingAction::ATTACK)].key)) {
@@ -107,13 +112,7 @@ void UpdatePlayerInputState(PlayerInputState& pInput,
           pBindings.bindings[static_cast<size_t>(BindingAction::RIGHT)].key)) {
     pInput.rightPressed = true;
   }
-  if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-    pInput.mine = true;
-  }
   if (IsGamepadAvailable(gamepadNum)) {
-    pInput.attack =
-        pInput.attack ||
-        IsGamepadButtonDown(gamepadNum, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
     pInput.attackPressed =
         pInput.attackPressed ||
         IsGamepadButtonPressed(gamepadNum, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
@@ -130,4 +129,14 @@ void UpdatePlayerInputState(PlayerInputState& pInput,
         pInput.rightPressed ||
         IsGamepadButtonPressed(gamepadNum, GAMEPAD_BUTTON_LEFT_FACE_RIGHT);
   }
+}
+
+void ClearTransientPlayerInputState(PlayerInputState& pInput,
+                                    const PlayerBindings& pBindings,
+                                    int gamepadNum) {
+  pInput.attackPressed = false;
+  pInput.attackReleased = false;
+  pInput.wepSelectPressed = false;
+  pInput.leftPressed = false;
+  pInput.rightPressed = false;
 }

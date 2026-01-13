@@ -163,7 +163,7 @@ void DebugPlayfield(Playfield& pf) {
   for (int y = 0; y < (int)pf._worldHeight; y++) {
     for (int x = 0; x < (int)pf._worldWidth; x++) {
       Vector2 samplePt = Vector2{(float)x, (float)y};
-      Cell* cell = pf.GetCellAtWorldPos(samplePt);
+      Cell* cell = pf.GetCell(samplePt);
       if (cell == nullptr) {
         debugStr += 'X';
       } else {
@@ -188,7 +188,7 @@ Image GenPlayfieldImage(Playfield& pf, int pixPerWorldUnit) {
       Vector2 samplePos = Vector2{(x + 0.5f) / (float)pixPerWorldUnit,
                                   (y + 0.5f) / (float)pixPerWorldUnit};
       float distSqr = 0;
-      Cell* cell = pf.GetCellAtWorldPos(samplePos, &distSqr);
+      Cell* cell = pf.GetCell(samplePos, &distSqr);
 
       float id = 0.0f;
       float vecX = 0.0f;

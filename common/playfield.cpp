@@ -42,6 +42,7 @@ void Playfield::PopulateFromLevelData(LevelData lvlDat) {
     }
     AddCell(Vector2{p.x, p.y}, cType);
   }
+  GenerateApproxMap(4);
 }
 
 std::vector<Cell*> Playfield::GetAndCleanDirtyCells() {
@@ -69,7 +70,7 @@ bool Playfield::UpdateCell(uint16_t idx, float hp) {
 
 int Playfield::GetNumCells() { return _cells.size(); }
 
-Cell* Playfield::GetCellAtWorldPos(Vector2 pos, float* outDistSqr) {
+Cell* Playfield::GetCell(Vector2 pos, float* outDistSqr) {
   int bX = (int)(pos.x / _bucketSize);
   int bY = (int)(pos.y / _bucketSize);
   float minDistSqr = std::numeric_limits<float>::max();
@@ -103,8 +104,41 @@ Cell* Playfield::GetCellAtWorldPos(Vector2 pos, float* outDistSqr) {
   }
 }
 
+Cell* Playfield::GetCellApprox(Vector2 pos) {
+  if (_approxMap.empty() || _approxMapWidth == 0) {
+    return nullptr;
+  }
+  int pixPerWorldUnit = _approxMapWidth / (int)std::floorf(_worldWidth);
+  int x = (int)(pos.x * pixPerWorldUnit);
+  int y = (int)(pos.y * pixPerWorldUnit);
+  int mapH = _approxMap.size() / _approxMapWidth;
+  if (x < 0 || x >= _approxMapWidth || y < 0 || y >= mapH) {
+    return nullptr;
+  }
+  uint16_t cellId = _approxMap[y * _approxMapWidth + x];
+  return (cellId < _cells.size()) ? &_cells[cellId] : nullptr;
+}
+
+void Playfield::GenerateApproxMap(int pixPerWorldUnit) {
+  int mapW = std::floorf(_worldWidth) * pixPerWorldUnit;
+  int mapH = std::floorf(_worldHeight) * pixPerWorldUnit;
+  _approxMapWidth = mapW;
+  _approxMap.clear();
+  _approxMap.resize(mapW * mapH);
+
+  for (int y = 0; y < mapH; y++) {
+    for (int x = 0; x < mapW; x++) {
+      Vector2 samplePos = Vector2{(x + 0.5f) / (float)pixPerWorldUnit,
+                                  (y + 0.5f) / (float)pixPerWorldUnit};
+      Cell* cell = GetCell(samplePos);
+      int index = y * mapW + x;
+      _approxMap[index] = (cell) ? cell->id : 0;
+    }
+  }
+}
+
 void Playfield::DamageCell(Vector2 worldPos, float damage) {
-  Cell* cell = GetCellAtWorldPos(worldPos);
+  Cell* cell = GetCell(worldPos);
   if (cell && cell->type != CellType::AIR) {
     cell->health -= damage;
     if (cell->health <= 0) {
@@ -199,6 +233,4 @@ Vector2 Playfield::GetBoundaryNormal(Vector2 pos) {
   return Vector2Normalize(norm);
 }
 
-void Playfield::Explode(Vector2 center, float radius, float damage) {
-  
-}
+void Playfield::Explode(Vector2 center, float radius, float damage) {}

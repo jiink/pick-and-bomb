@@ -64,7 +64,7 @@ bool BombUpdate_Standard(Bomb& b, GameState& s, float dt) {
   const WeaponProperties& props = WeaponPropRegistry[(uint8_t)b.type];
   b.velocity = Vector2Scale(b.velocity, pow(props.friction, dt));
   Vector2 nextPos = Vector2Add(b.pos, Vector2Scale(b.velocity, dt));
-  Cell* c = s.playfield.GetCellAtWorldPos(nextPos);
+  Cell* c = s.playfield.GetCell(nextPos);
   if (c && GetCellTypeInfo(c->type).isSolid) {
     b.velocity = {0, 0};
     b.isStuck = true;
@@ -128,7 +128,7 @@ void UpdatePlayer(Player& player, GameState& state,
   float fric = pow(player.friction, dt);
   player.velocity = Vector2Scale(player.velocity, fric);
   Vector2 nextPos = Vector2Add(player.pos, Vector2Scale(player.velocity, dt));
-  Cell* targetCell = state.playfield.GetCellAtWorldPos(nextPos);
+  Cell* targetCell = state.playfield.GetCell(nextPos);
   bool hittingWall = (!targetCell || GetCellTypeInfo(targetCell->type).isSolid);
   if (hittingWall) {
     if (pInput.mine) {
@@ -148,7 +148,7 @@ void UpdatePlayer(Player& player, GameState& state,
         player.velocity = Vector2Subtract(player.velocity, slideForce);
       }
       nextPos = Vector2Add(player.pos, Vector2Scale(player.velocity, dt));
-      Cell* slideCheck = state.playfield.GetCellAtWorldPos(nextPos);
+      Cell* slideCheck = state.playfield.GetCell(nextPos);
       if (!slideCheck || GetCellTypeInfo(slideCheck->type).isSolid) {
         nextPos = player.pos;
         player.velocity = {0, 0};
@@ -182,7 +182,7 @@ void DebugPlayfield(Playfield& pf) {
   for (int y = 0; y < 50; y++) {
     for (int x = 0; x < 50; x++) {
       Vector2 samplePt = Vector2{(float)x, (float)y};
-      Cell* cell = pf.GetCellAtWorldPos(samplePt);
+      Cell* cell = pf.GetCell(samplePt);
       if (cell == nullptr) {
         debugStr += 'X';
       } else {
@@ -192,7 +192,22 @@ void DebugPlayfield(Playfield& pf) {
     }
     debugStr += '\n';
   }
-  PAB_INFO("%s", debugStr.c_str());
+  PAB_INFO("OG: \n%s\n-------------\n", debugStr.c_str());
+  debugStr = "";
+  for (int y = 0; y < 50; y++) {
+    for (int x = 0; x < 50; x++) {
+      Vector2 samplePt = Vector2{(float)x, (float)y};
+      Cell* cell = pf.GetCellApprox(samplePt);
+      if (cell == nullptr) {
+        debugStr += 'X';
+      } else {
+        int cellTypeAsInt = (int)(cell->type);
+        debugStr += std::to_string(cellTypeAsInt);
+      }
+    }
+    debugStr += '\n';
+  }
+  PAB_INFO("APPROX: \n%s\n-------------\n", debugStr.c_str());
 }
 
 std::optional<LevelData> LoadLevel(const char* filename) {

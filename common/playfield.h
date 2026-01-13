@@ -61,15 +61,19 @@ private:
   int _gridW = 0;
   int _gridH = 0;
   std::vector<int> _dirtyCellIndices;
+  std::vector<uint16_t> _approxMap;
 
 public:
   float _worldWidth = 0.0f;
   float _worldHeight = 0.0f;
   float _bucketSize = 0.0f;
+  float _approxMapWidth = 0.0f;
   Playfield(float worldWidth, float worldHeight, float bucketSize);
   Playfield();
   bool AddCell(Vector2 worldPos, CellType cType);
-  Cell* GetCellAtWorldPos(Vector2 pos, float* outDistSqr = nullptr);
+  Cell* GetCell(Vector2 pos, float* outDistSqr = nullptr);
+  Cell* GetCellApprox(Vector2 pos);
+  void GenerateApproxMap(int pixPerWorldUnit);
   void DamageCell(Vector2 worldPos, float damage);
   bool IsInitialized() const;
   const std::vector<Cell>& GetAllCells() const { return _cells; }

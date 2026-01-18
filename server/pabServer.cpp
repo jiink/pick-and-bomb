@@ -254,6 +254,14 @@ void SetupPlayfield(GameState& state) {
   // DebugPlayfield(state.playfield);
 }
 
+void ConsumeTransientInputs(InputState& inputs) {
+  for (auto& input : inputs.playerInputs) {
+    input.attackPressed = false;
+    input.attackReleased = false;
+    input.wepSelectPressed = false; 
+  }
+}
+
 void UpdateGame(GameState& state, InputState& inputs, const float dt) {
   for (auto& [id, p] : state.players) {
     if (p.dead) {
@@ -263,6 +271,7 @@ void UpdateGame(GameState& state, InputState& inputs, const float dt) {
     UpdatePlayer(p, state, pInput, dt);
   }
   UpdateBombs(state, dt);
+  ConsumeTransientInputs(inputs);
 }
 
 void ApplyPlayerInputs(const PlayerInputState& pInputs) {

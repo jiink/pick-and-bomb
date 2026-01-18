@@ -74,7 +74,8 @@ public:
   Cell* GetCell(Vector2 pos, float* outDistSqr = nullptr);
   Cell* GetCellApprox(Vector2 pos);
   void GenerateApproxMap(int pixPerWorldUnit);
-  void DamageCell(Vector2 worldPos, float damage);
+  float DamageCell(Cell* cell, float damage);
+  float DamageCell(Vector2 worldPos, float damage);
   bool IsInitialized() const;
   const std::vector<Cell>& GetAllCells() const { return _cells; }
   void Clear();

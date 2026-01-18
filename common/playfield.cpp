@@ -137,18 +137,28 @@ void Playfield::GenerateApproxMap(int pixPerWorldUnit) {
   }
 }
 
-void Playfield::DamageCell(Vector2 worldPos, float damage) {
-  Cell* cell = GetCell(worldPos);
+float Playfield::DamageCell(Cell* cell, float damage) {
   if (cell && cell->type != CellType::AIR) {
+    float cellHealthBefore = cell->health;
     cell->health -= damage;
     if (cell->health <= 0) {
+      cell->health = 0;
       cell->type = CellType::AIR;
     }
     if (!cell->isDirty) {
       cell->isDirty = true;
       _dirtyCellIndices.push_back(cell->id);
     }
+    float damageActuallyDealt = cell->health - cellHealthBefore;
+    return damageActuallyDealt;
+  } else {
+    return 0;
   }
+}
+
+float Playfield::DamageCell(Vector2 worldPos, float damage) {
+  Cell* cell = GetCell(worldPos);
+  return DamageCell(cell, damage);
 }
 
 bool Playfield::IsInitialized() const {
@@ -261,23 +271,10 @@ void Playfield::Explode(Vector2 center, float radius, float damage) {
         if (GetCellTypeInfo(cell->type).isInvincible) {
           break;
         }
-        if (cell->health <= currentRayPower) {
-          currentRayPower -= cell->health;
-          cell->health = 0.0f;
-          cell->type = CellType::AIR;
-          if (!cell->isDirty) {
-            cell->isDirty = true;
-            _dirtyCellIndices.push_back(cell->id);
-          }
-        } else {
-          // cell absorbs ray
-          cell->health -= currentRayPower;
-          currentRayPower = 0.0f;
-          if (!cell->isDirty) {
-            cell->isDirty = true;
-            _dirtyCellIndices.push_back(cell->id);
-          }
-          break; 
+        float damageDealt = DamageCell(cell, currentRayPower);
+        currentRayPower -= damageDealt;
+        if (currentRayPower < 0) {
+          break;
         }
         if (currentRayPower <= 0.01f) {
           break;

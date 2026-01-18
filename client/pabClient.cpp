@@ -350,6 +350,7 @@ void Tick() {
                    SHADER_UNIFORM_INT);
   }
   if (_cellPropertyTex.id > 0) {
+    PAB_INFO("> duh...");
     Image cellPImg = GenCellPropertyImage(_gameState.playfield);
     UpdateTexture(_cellPropertyTex, cellPImg.data);
     UnloadImage(cellPImg);

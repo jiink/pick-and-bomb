@@ -371,7 +371,11 @@ OBJ_DIR = obj
 SRC = $(call rwildcard, *.c, *.h)
 #OBJS = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 # By default include main plus project modules under server/ and client/ to avoid grabbing unrelated directories
-OBJS ?= main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp) $(wildcard common/*.cpp)
+# OBJS ?= main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp) $(wildcard common/*.cpp)
+# Define the source files
+SRC = main.cpp $(wildcard server/*.cpp) $(wildcard client/*.cpp) $(wildcard common/*.cpp)
+# Define the object files (replace .cpp with .o)
+OBJS = $(SRC:.cpp=.o)
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)
@@ -394,14 +398,16 @@ $(PROJECT_NAME): $(OBJS)
 # Compile source files
 # NOTE: This pattern will compile every module defined on $(OBJS)
 #%.o: %.c
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+# $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+# 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
+%.o: %.cpp
 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
 
 # Clean everything
 clean:
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),WINDOWS)
-		del *.o *.exe /s
+		rm -f *.o *.exe */*.o
     endif
     ifeq ($(PLATFORM_OS),LINUX)
 	find -type f -executable | xargs file -i | grep -E 'x-object|x-archive|x-sharedlib|x-executable' | rev | cut -d ':' -f 2- | rev | xargs rm -fv

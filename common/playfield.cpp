@@ -233,4 +233,56 @@ Vector2 Playfield::GetBoundaryNormal(Vector2 pos) {
   return Vector2Normalize(norm);
 }
 
-void Playfield::Explode(Vector2 center, float radius, float damage) {}
+void Playfield::Explode(Vector2 center, float radius, float damage) {
+  if (_approxMapWidth == 0 || _worldWidth <= 0 || _approxMap.empty()) {
+    return;
+  }
+  int pixPerWorldUnit = _approxMapWidth / (int)std::floorf(_worldWidth);
+  if (pixPerWorldUnit <= 0) pixPerWorldUnit = 1;
+  float stepSize = 1.0f / (float)pixPerWorldUnit;
+  float circumference = 2.0f * 3.14f * radius;
+  int rayCount = (int)std::ceilf(circumference / stepSize);
+  if (rayCount < 8) rayCount = 8;
+  float angleStep = (2.0f * 3.14f) / (float)rayCount;
+  for (int i = 0; i < rayCount; i++) {
+    float angle = i * angleStep;
+    float dirX = std::cosf(angle);
+    float dirY = std::sinf(angle);
+    float currentRayPower = damage;
+    int lastHitCellId = -1;
+    for (float dist = 0.0f; dist <= radius; dist += stepSize) {
+      Vector2 currentPos = { center.x + dirX * dist, center.y + dirY * dist };
+      Cell* cell = GetCellApprox(currentPos);
+      if (cell && cell->type != CellType::AIR) {
+        if (cell->id == lastHitCellId) {
+          continue;
+        }
+        lastHitCellId = cell->id;
+        if (GetCellTypeInfo(cell->type).isInvincible) {
+          break;
+        }
+        if (cell->health <= currentRayPower) {
+          currentRayPower -= cell->health;
+          cell->health = 0.0f;
+          cell->type = CellType::AIR;
+          if (!cell->isDirty) {
+            cell->isDirty = true;
+            _dirtyCellIndices.push_back(cell->id);
+          }
+        } else {
+          // cell absorbs ray
+          cell->health -= currentRayPower;
+          currentRayPower = 0.0f;
+          if (!cell->isDirty) {
+            cell->isDirty = true;
+            _dirtyCellIndices.push_back(cell->id);
+          }
+          break; 
+        }
+        if (currentRayPower <= 0.01f) {
+          break;
+        }
+      }
+    }
+  }
+}

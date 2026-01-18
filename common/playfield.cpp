@@ -263,6 +263,7 @@ void Playfield::Explode(Vector2 center, float radius, float damage) {
     for (float dist = 0.0f; dist <= radius; dist += stepSize) {
       Vector2 currentPos = { center.x + dirX * dist, center.y + dirY * dist };
       Cell* cell = GetCellApprox(currentPos);
+      bool penetrationMode = currentRayPower < 500.0f;
       if (cell && cell->type != CellType::AIR) {
         if (cell->id == lastHitCellId) {
           continue;
@@ -271,10 +272,12 @@ void Playfield::Explode(Vector2 center, float radius, float damage) {
         if (GetCellTypeInfo(cell->type).isInvincible) {
           break;
         }
-        float damageDealt = DamageCell(cell, currentRayPower);
-        currentRayPower -= damageDealt;
-        if (currentRayPower < 0) {
-          break;
+        if (penetrationMode) {
+          float damageDealt = DamageCell(cell, currentRayPower * 0.1f);
+          currentRayPower -= damageDealt;
+        } else {
+          float damageDealt = DamageCell(cell, currentRayPower);
+          currentRayPower -= damageDealt;
         }
         if (currentRayPower <= 0.01f) {
           break;

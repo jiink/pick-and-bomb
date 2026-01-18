@@ -56,7 +56,7 @@ float RandomFloat(float min, float max)
 
 
 void Explode(GameState& state, Vector2 center, float radius, float damage) {
-  PAB_INFO("boom");
+  PAB_INFO("boom (%.1f dmg)", damage);
   state.playfield.Explode(center, radius, damage);
 }
 
